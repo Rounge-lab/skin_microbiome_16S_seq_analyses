@@ -1,0 +1,402 @@
+#Load libraries ---------------------------------------------------------------------------------------------------------------------------------------------
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(phyloseq) 
+library(grid)
+library(ggpubr)
+library(vegan)
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+# Import already cleaned and rarefied phyloseq objects for each site
+load("hands_paper1_clean_rarefied.RData")
+load("forearms_paper1_clean_rarefied.RData")
+
+
+## ALPHA DIVERSITY -------------------------------------------------------------------------------------------------------------------------------------------
+
+# data frame with richness metrics
+all_rounds_hands= data.frame("sampleid" = phyloseq::sample_data(hands_clean_rare)$sampleid, "subjectid" = phyloseq::sample_data(hands_clean_rare)$subjectid, 
+                             "Observed" = phyloseq::estimate_richness(hands_clean_rare, measures = "Observed"),
+                             "Shannon" = phyloseq::estimate_richness(hands_clean_rare, measures = "Shannon"),
+                             "Inverse_Simpson" = phyloseq::estimate_richness(hands_clean_rare, measures = "InvSimpson"), 
+                             "sample_round" = factor(phyloseq::sample_data(hands_clean_rare)$sample_round),
+                             "batch" = factor(phyloseq::sample_data(hands_clean_rare)$extraction_batch))
+
+#linear mixed effects models
+model_h_obs = lme(Observed ~ sample_round+batch, random = ~ 1 + sample_round | subject.id, data = all_rounds_hands, method="REML") #REML is default, random effect includes random intercept and slope
+model_h_sha = lme(Shannon ~ sample_round+batch, random = ~ 1 + sample_round | subject.id, data = all_rounds_hands, method="REML")
+model_h_inv = lme(InvSimpson ~ sample_round+batch, random = ~ 1 + sample_round | subject.id, data = all_rounds_hands, method="REML")
+summary(model_h_obs)
+#model_summary$tTable #stat values
+
+#estimated marginal means and contrast between each sample round pair in the linear model above
+emmeans_obs = emmeans(model_h_obs, specs = pairwise ~ sample_round) 
+emmeans_shannon = emmeans(model_h_sha, specs = pairwise ~ sample_round)
+emmeans_invsimpson = emmeans(model_h_inv, specs = pairwise ~ sample_round)
+
+#emmeans significance plot
+p = pwpp(emmeans_invsimpson, sort=F)
+p + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3")) + geom_vline(xintercept = 0.05, lty="dashed") + labs(y="Sample round")
+
+#alpha div emmeans plot
+emmeans_df = as.data.frame(emmeans_obs)
+emmeans_df = emmeans_df %>% select(-contrast) %>% head(3)
+p = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=c(336,397,380), ymax=c(436,556,609)), width=0.2) + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"))
+
+
+
+#PLOTTING alpha div
+
+#All rounds HANDS alpha div figure
+fig_all_hands = all_rounds_hands %>% 
+  gather(key=metric, value=value, c("Shannon", "InvSimpson")) %>%
+  mutate(metric=factor(metric, levels = c("Shannon", "InvSimpson"))) %>%
+  ggplot(aes(x=factor(sample_round, level = c("1", "2", "3")),
+             y=value), fill = sample_round) +
+  geom_boxplot(outlier.color="grey", aes(group = sample_round, fill= sample_round)) + 
+  #geom_violin(aes(group = sample_round, fill= sample_round)) +
+  geom_jitter(height=0, width=0) +
+  labs(title="", x="", y = "") + 
+  facet_wrap(~ metric, scales = "free", labeller = labeller(metric = c("InvSimpson"="Inverse Simpson"))) +
+  theme(legend.position="none", legend.text = element_text(size=14), legend.title = element_text(size=14), strip.text=element_text(size=12), axis.text = element_text(size=10), axis.text.x = element_blank()) +
+  theme_bw() + 
+  scale_fill_manual(values=c("grey80", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) +
+  scale_y_continuous(expand = expansion(mult=c(0.1,0.1)))
+
+#All rounds FOREARM alpha div figure
+#All forearm samples in dataframe
+all_rounds_forearm = data.frame("sampleid" = phyloseq::sample_data(f_clean_rare)$sampleid, "subjectid" = phyloseq::sample_data(f_clean_rare)$subjectid, "Observed" = phyloseq::estimate_richness(f_clean_rare, measures = "Observed"),
+                                "Shannon" = phyloseq::estimate_richness(f_clean_rare, measures = "Shannon"),
+                                "Inverse Simpson" = phyloseq::estimate_richness(f_clean_rare, measures = "InvSimpson"),
+                                "sample_round" = factor(phyloseq::sample_data(f_clean_rare)$sample_round),
+                                "batch" = factor(phyloseq::sample_data(f_clean_rare)$extraction_batch))
+
+model_f_obs = lme(Observed ~ sample_round+batch, random = ~ 1 | subjectid, data = all_rounds_forearm, method="REML") #REML is default, random effect includes only random intercept, error if both
+model_f_sha = lme(Shannon ~ sample_round+batch, random = ~ 1 + sample_round | subjectid, data = all_rounds_forearm, method="REML")
+model_f_inv = lme(InvSimpson ~ sample_round+batch, random = ~ 1 + sample_round | subjectid, data = all_rounds_forearm, method="REML")
+summary(model_h)
+model_summary$tTable #stat values
+emmeans_obs_f = emmeans(model_f_obs, specs = pairwise ~ sample_round) #estimated marginal means and contrast between each sample round pair in the lme
+emmeans_shannon_f = emmeans(model_f_sha, specs = pairwise ~ sample_round)
+emmeans_invsimpson_f = emmeans(model_f_inv, specs = pairwise ~ sample_round)
+
+#emmeans significance plot
+p = pwpp(emmeans_obs, sort=F)
+p + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3")) + geom_vline(xintercept = 0.05, lty="dashed") + labs(y="Sample round")
+
+#alpha div emmeans plot
+emmeans_df = as.data.frame(emmeans_invsimpson_f)
+emmeans_df = emmeans_df %>% select(-contrast) %>% head(3)
+p_obs = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=lower.CL, ymax=upper.CL), width=0.2) + 
+  scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) + 
+  geom_segment(aes(x=1, xend=3, y=620, yend=620), color="black", lwd=0.1) + annotate("text", x=2, y=625, label="p=0.0455", size=3) + labs(x="") #annotation for hand obs plot
+
+p_sha = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=lower.CL, ymax=upper.CL), width=0.2) + 
+  scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) 
+#+ geom_segment(aes(x=1, xend=2, y=5, yend=5), color="black", lwd=0.1) + annotate("text", x=1.5, y=5.2, label="p=0.0024", size=3) + labs(x="") + geom_segment(aes(x=1, xend=3, y=5, yend=5), color="black", lwd=0.1) + annotate("text", x=2, y=5.2, label="p=0.0002", size=3) + labs(x="")
+
+p_inv = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=lower.CL, ymax=upper.CL), width=0.2) + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) + labs(x="")
+
+ggarrange(p_obs + rremove("xlab") + ylab("Estimated marginal means"), p_sha + rremove("ylab") , p_inv + rremove("xlab")+ rremove("ylab"), ncol=3, nrow=1, common.legend = TRUE, legend="bottom", align = "hv", font.label = list(size=12, color="black", face="bold", family=NULL))
+
+
+fig_all_forearm = all_rounds_forearm %>% 
+  gather(key=metric, value=value, c("Shannon", "InvSimpson")) %>%
+  mutate(metric=factor(metric, levels = c("Shannon", "InvSimpson"))) %>%
+  ggplot(aes(x=sample_round, y=value), fill = sample_round) +
+  geom_boxplot(outlier.color="grey", aes(group = sample_round, fill= sample_round)) + 
+  #geom_violin(aes(group = sample_round, fill= sample_round)) +
+  geom_jitter(height=0, width=0) +
+  theme(legend.position="bottom", axis.text.x = element_blank(), legend.text = element_text(size=14), legend.title = element_text(size=14), strip.text=element_text(size=12), axis.text = element_text(size=10)) + 
+  labs(title="", x="", y = "") + 
+  facet_wrap(~ metric, scales = "free_y", labeller = labeller(metric = c("InvSimpson"="Inverse Simpson"))) +
+  theme_bw() + 
+  scale_fill_manual(values=c("grey80", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) +
+  scale_y_continuous(expand = expansion(mult=c(0.1,0.1))) #breaks = pretty_breaks(n=4), labels = scales::number_format(accuracy=0.1), 
+
+#geom_segment(aes(x=1, xend=2, y=5, yend=5), color="black", lwd=0.1) + annotate("text", x=1.5, y=5.05, label="**", size=3) + labs(x="") + geom_segment(aes(x=1, xend=3, y=5.25, yend=5.25), color="black", lwd=0.1) + annotate("text", x=2, y=5.3, label="p=0.0002", size=3) + labs(x="")
+
+
+#combine plot for hands and forearm
+alphadiv_sha_inv = ggarrange(fig_all_hands, fig_all_forearm, labels=c("A", "B"), ncol=1, nrow=2, common.legend = TRUE, legend="bottom", align = "hv") + theme(legend.position = "bottom")
+ggsave(alphadiv_sha_inv, file="alphadiv_hands_forearms_paper1.pdf", width=210, units="mm", height=150) #A4 width
+
+
+combplot = arrangeGrob(fig_all_hands, fig_all_forearm, ncol=1)
+ggsave(file = "alphadiv_hands_forearms_paper1.pdf", combplot) #save plot
+
+
+#Alpha div hands vs forearms (supplementary Fig. S7)
+load("ps_sol_paper1_clean_rarefied.RData") #if not already loaded
+all_rounds= data.frame("sampleid" = phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$sampleid, 
+                       "subjectid" = phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$subjectid, 
+                       "Observed" = phyloseq::estimate_richness(ps_sol_paper1_clean_rarefied, measures = "Observed"),
+                       "Shannon" = phyloseq::estimate_richness(ps_sol_paper1_clean_rarefied, measures = "Shannon"),
+                       "Inverse_Simpson" = phyloseq::estimate_richness(ps_sol_paper1_clean_rarefied, measures = "InvSimpson"), 
+                       "sample_round" = factor(phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$sample_round),
+                       "batch" = factor(phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$extraction_batch),
+                       "skinsite" = factor(phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$skinsite))
+#plot alpha div for hands vs forearms over time
+all_rounds %>%
+  ggplot(aes(x=skinsite, y=Shannon), fill = skinsite) +
+  geom_boxplot(aes(fill=skinsite)) + facet_wrap(~sample_round)
+#plot baseline alpha div hands vs forearms
+all_rounds %>% filter(sample_round==1) -> baseline_data
+baseline_data %>% 
+  gather(key=metric, value=value, c("Observed", "Shannon", "InvSimpson")) %>%
+  mutate(metric=factor(metric, levels = c("Observed", "Shannon", "InvSimpson"))) %>%
+  ggplot(aes(x=skinsite, y=value), fill = skinsite) + 
+  geom_boxplot(outlier.color="grey", aes(group = skinsite, fill= skinsite)) +
+  geom_jitter(height=0, width=0) + 
+  facet_wrap(~ metric, scales = "free") +
+  theme_bw() + labs(fill="Skin site", y="Alpha diversity", x="") + theme(axis.text.x = element_blank()) + scale_fill_discrete(labels=c("hands", "forearms")) + 
+  scale_y_continuous(expand=expansion(mult=c(0.05,0.05))) -> alpha_skinsite_base
+
+#testing alpha div difference
+#linear mixed effects model
+library(nlme)
+model_skinsite = lme(InvSimpson ~ skinsite + batch, random= ~1 | subjectid, data = baseline_data) #change metric
+summary(model_skinsite)$tTable #p-values
+emmeans(model_skinsite, specs = pairwise ~ skinsite)
+
+#alpha div testing unadjusted
+wilcox.observed = pairwise.wilcox.test(all_rounds_hands$Observed, sample_data(hands_clean_rare)$sample_round, p.adjust.method = "BH")
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+## BETA DIVERSITY ----------------------------------------------------------------------------------------------------------------------------------------------
+
+#load rarefied objects if not already loaded
+load("ps_sol_paper1_clean_rarefied.RData")#load rarefied phyloseq object
+load("hands_paper1_clean_rarefied.RData")
+load("forearms_paper1_clean_rarefied.RData")
+
+#test all factors, how much they influence microbiome composition (PERMANOVA)
+bray = phyloseq::distance(ps_sol_paper1_clean_rarefied, method="bray") #dissimilarity matrix
+test.adonis = adonis2(bray ~ subjectid + sample_round + skinsite + extraction_batch, data = data.frame(
+  sample_data(ps_sol_paper1_clean_rarefied)), permutations = 999, by="margin") #by="margin" would test each term against each other
+test.adonis
+adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
+
+bray_hands = phyloseq::distance(hands_clean_rare, method="bray") 
+bray_forearms = phyloseq::distance(f_clean_rare, method="bray") 
+#PERMANOVA
+test.adonis = adonis2(bray_hands ~ subjectid + sample_round + extraction_batch, data = data.frame(sample_data(hands_clean_rare)), permutations = 999, by="margin") #by="margin" would test each term against each other
+test.adonis #R² is the percentage of variance explained by the rounds
+adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
+
+#PCOA plot of beta diversity, including stat results
+pcoa_hands = ordinate(hands_clean_rare, method="PCoA", distance=bray_hands, formula = ~ sample_round+extraction_batch) #PCoA results
+pcoa_forearms = ordinate(f_clean_rare, method="PCoA", distance=bray_forearms, formula = ~ sample_round+extraction_batch) #PCoA results
+pcoa_all = ordinate(ps_sol_paper1_clean_rarefied, method="PCoA", distance=bray, formula = ~sample_round + skinsite+extraction_batch)
+
+betaplot_f = plot_ordination(f_clean_rare, pcoa_forearms, color = "sample_round") + 
+  geom_line(aes(group=subjectid), color="darkgray", lty="dashed") +
+  stat_ellipse() + 
+  scale_color_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + theme_bw() + geom_point(size=2)
+betaplot_h = plot_ordination(hands_clean_rare, pcoa_hands, color = "sample_round") + 
+  geom_line(aes(group=subjectid), color="darkgray", lty="dashed") +
+  stat_ellipse() + 
+  scale_color_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + theme_bw() + geom_point(size=2)
+#+ theme(strip.background = element_blank())
+beta_hands = betaplot_h + annotation_custom(grobTree(textGrob("R = 0.429, p < 0.001", x=0.02, y=0.96, hjust=0, gp=gpar(col="black", fontsize=8))))
+beta_forearms = betaplot_f + annotation_custom(grobTree(textGrob("R = 0.458, p < 0.001", x=0.02, y=0.96, hjust=0, gp=gpar(col="black", fontsize=8))))
+
+#batch comparison
+betaplot_batch_f = plot_ordination(f_clean_rare, pcoa_forearms, color = "extraction_batch") + 
+  stat_ellipse() + 
+  labs(color="Batch") +
+  scale_color_brewer(palette="Dark2") + geom_point(size=2) + theme_bw()
+test.adonis = adonis2(bray_forearms ~ extraction_batch, data = data.frame(sample_data(f_clean_rare)), permutations = 999) #by="margin" would test each term against each other
+test.adonis #R² is the percentage of variance explained by the rounds
+adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
+beta_forearm_batch = betaplot_batch_f + annotation_custom(grobTree(textGrob("R² = 0.0755, p = 0.187", x=0.03, y=0.98, hjust=0, gp=gpar(col="black", fontsize=8))))
+
+betaplot_batch_h= plot_ordination(hands_clean_rare, pcoa_hands, color = "extraction_batch") +
+  stat_ellipse() + 
+  labs(color="Batch") +
+  scale_color_brewer(palette="Dark2") + geom_point(size=2) + theme_bw()
+test.adonis = adonis2(bray_hands ~ extraction_batch, data = data.frame(sample_data(hands_clean_rare)), permutations = 999) #by="margin" would test each term against each other
+test.adonis #R² is the percentage of variance explained by the rounds
+adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
+beta_hands_batch = betaplot_batch_h + annotation_custom(grobTree(textGrob("R² = 0.05568, p = 0.022", x=0.03, y=0.98, hjust=0, gp=gpar(col="black", fontsize=8))))
+beta_comb_batch = ggarrange(beta_hands_batch, beta_forearm_batch, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="right", align="hv")
+
+#combined beta div plot
+beta_comb = ggarrange(beta_hands, beta_forearms, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="bottom", align="hv") + geom_point(size=2)
+beta_comb = beta_comb + geom_point(size=1)
+ggsave(beta_comb, file="beta_div_combined_paper1.pdf", width=7.5, height=4)
+
+#Beta dispersion: check whether equal variance between group; if not use ANOSIM instead of permanova
+f_dispersion = betadisper(bray_forearms, data.frame(sample_data(f_clean_rare))$sample_round, type = "centroid")
+f_disp_test = permutest(f_dispersion, pairwise=TRUE, permutations=999)
+anosim_results = anosim(bray_forearms, data.frame(sample_data(f_clean_rare))$sample_round, permutations = 999)
+anosim_results$statistic #R value range between -1 and 1. Positive values suggest that there is more similarity within groups than between groups.
+anosim_results$signif
+
+anova_test_f = anova(f_dispersion) #test statistical difference in beta dispersion
+TukeyHSD(f_dispersion) #which contrasts are different
+plot(f_dispersion)
+boxplot(f_dispersion, xlab="Sample round") #distribution of distances to centroid for each round - how similar are the soldiers to each other?
+
+beta_disp_hands = data.frame(
+  site = "hands", 
+  round = data.frame(sample_data(hands_clean_rare))$sample_round,
+  beta_disp = h_dispersion$distances
+)
+beta_disp_forearms = data.frame(
+  site = "forearms", 
+  round = data.frame(sample_data(f_clean_rare))$sample_round,
+  beta_disp = f_dispersion$distances
+)
+disp_combined = rbind(beta_disp_hands, beta_disp_forearms)
+
+#beta dispersion boxplot (soldier similarity over time)
+betadisp_boxes = ggplot(disp_combined, aes(x=round, y=beta_disp, fill=round)) +
+  geom_boxplot() +
+  facet_wrap(~reorder(site,beta_disp)) +
+  labs(x="", y="Distance to centroid") + 
+  theme_bw() +
+  scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) 
+ggsave(betadisp_boxes, filename="beta_disp_boxplot.pdf")
+saveRDS(betadisp_boxes, file="beta_disp_boxplot.rds")
+
+#beta div hands vs forearms (Fig. S7)
+baseline_all = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==1)
+baseline_all = prune_taxa(taxa_sums(baseline_all)>0, baseline_all)
+bray_base = phyloseq::distance(baseline_all, method="bray")
+pcoa_base = ordinate(baseline_all, method="PCoA", distance=bray_base, formula = ~skinsite+extraction_batch)
+plot_ordination(baseline_all, pcoa_base, color="skinsite") + stat_ellipse() + theme_bw() + geom_point(size=3) + labs(color="Skin site") + scale_color_discrete(labels=c("hands", "forearms")) -> bray_base_skinsite
+
+#permanova test for statistical difference
+test.adonis = adonis2(bray_base ~ skinsite + subjectid + extraction_batch, data = data.frame(sample_data(baseline_all)), permutations = 999, by="margin") #by="margin" would test each term against each other #by="margin" would test each term against each other
+test.adonis #R² is the percentage of variance explained by the rounds
+adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
+bray_base_skinsite = bray_base_skinsite + annotation_custom(grobTree(textGrob("R² = 0.08313, p = 0.003", x=0.03, y=0.06, hjust=0, gp=gpar(col="black", fontsize=10))))
+
+#combined alpha beta for skin site comparison baseline
+ggarrange(alpha_skinsite_base, bray_base_skinsite, labels=c("A", "B"), ncol=1, nrow=2) -> base_hand_v_forearm
+ggsave(base_hand_v_forearm, filename = "baseline_hand_vs_forearm.pdf", height=5, width=6)
+
+
+#beta div comparing ordination methods
+library("plyr")
+dist="bray" #bray curtis distance
+ord_meths=c("DCA", "CCA", "RDA", "NMDS", "MDS", "PCoA") #all (non-phylogenic) ordination methods 
+set.seed(123)
+plist = llply(as.list(ord_meths), function(i, physeq, dist){
+  ordi=ordinate(physeq, method=i, distance=dist, formula= ~ sample_round + extraction_batch)
+  plot_ordination(physeq, ordi, "samples", color="sample_round")
+}, f_clean_rare, dist) #change this depending on phyloseq object
+names(plist) <- ord_meths
+
+pdataframe = ldply(plist, function(x){
+  df = x$data[, 1:2]
+  colnames(df) = c("Axis_1", "Axis_2")
+  return(cbind(df,x$data))
+})
+names(pdataframe)[1] ="method"
+
+p = ggplot(pdataframe, aes(Axis_1, Axis_2, color=sample_round, fill=sample_round)) #shape=skinsite
+p = p + geom_point(size=3) + scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + scale_color_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) 
+p = p + facet_wrap(~method, scales="free")
+p = p + geom_line(aes(group=subjectid), color="darkgray", lty="dashed") 
+ellipse = p + stat_ellipse(aes(group=sample_round))
+saveRDS(ellipse, file="ordination_methods_plot_forearms.rds")
+poly = p + geom_polygon()                    
+
+
+#beta div intra vs inter
+bray = phyloseq::distance(ps_sol_paper1_clean_rarefied, method="bray")
+bray_mat = as.matrix(bray) %>% as.data.frame()
+rownames(bray_mat) = as.numeric(rownames(bray_mat))
+meta_sol_paper1 = data.frame(sample_data(ps_sol_paper1_clean_rarefied))
+meta_sol_paper1$sampleid = as.character(meta_sol_paper1$sampleid)
+
+#within vs between subject distance
+bray_within_between_samesite = bray_mat %>% 
+  rownames_to_column("sample_id_1") %>% 
+  pivot_longer(-sample_id_1, names_to="sample_id_2", values_to = "dist") %>% 
+  left_join(meta_sol_paper1 %>% select(
+    sample_id_1 = sampleid, subject_id_1 = subjectid, sample_round_1 = sample_round, skinsite_1 = skinsite)) %>% 
+  left_join(meta_sol_paper1 %>% select(
+    sample_id_2 = sampleid, subject_id_2 = subjectid, sample_round_2 = sample_round, skinsite_2 = skinsite)) %>% 
+  mutate(same_individual = case_when(subject_id_1 == subject_id_2 ~"Within",
+                                     subject_id_1 != subject_id_2 ~"Between")) %>% 
+  mutate(same_site = case_when(skinsite_1 == skinsite_2 ~"Same_skinsite",
+                               skinsite_1 != skinsite_2 ~"Hands vs Forearms")) %>% 
+  mutate(same_time = case_when(sample_round_1 == sample_round_2 ~"Same_time",
+                               sample_round_1 != sample_round_2 ~"Over time")) %>%
+  filter(sample_id_1 != sample_id_2) ##remove dist to the same sample
+
+bray_within_between_samesite %>% mutate(pair_id = paste(pmin(sample_id_1, sample_id_2), pmax(sample_id_1, sample_id_2), sep="_")) %>% distinct(pair_id, .keep_all = TRUE) -> inter_intra_distances
+
+bray_within_between_samesite %>% 
+  group_by(same_individual, same_site, subject_id_1, skinsite_1) %>% 
+  summarize(mean_dist= mean(dist)) %>% 
+  ggplot(aes(x=reorder(same_individual, mean_dist),y=mean_dist, fill=same_individual)) + 
+  geom_boxplot() + labs(y="Bray-Curtis distance") + scale_fill_manual(values=c("#9e4f4a", "#ecb775")) +
+  facet_wrap(~skinsite_1, labeller= labeller(skinsite_1 = function(variable) { #facet labels are capitalized
+    return(tools::toTitleCase(as.character(variable)))})) -> intra_inter_samesite_plot
+
+bray_within_between_samesite %>% 
+  filter(skinsite_1 != skinsite_2) %>% 
+  group_by(same_individual, same_site, subject_id_1, skinsite_1) %>% 
+  summarize(mean_dist= mean(dist)) %>% 
+  ggplot(aes(x=reorder(same_individual, mean_dist),y=mean_dist, fill=same_individual)) + 
+  geom_boxplot() + facet_wrap(~same_site) + labs(y="Bray-Curtis distance") + scale_fill_manual(values=c("#9e4f4a", "#ecb775")) -> intra_inter_h_vs_f_plot
+
+#between-distance over time, for each skinsite
+inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Same_skinsite" & same_individual=="Between" & same_time=="Same_time") -> inter_dist
+inter_dist %>% ggplot(aes(x=sample_round_1, y=dist, fill=sample_round_1)) + geom_boxplot() + scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name="Sample round", labels=c("Baseline", "Post exercise", "3W Post exercise")) + labs(x="", y="Bray-Curtis distance (inter-individual)") + theme_bw() + facet_wrap(~skinsite_1, labeller=labeller(skinsite_1 = c(hands="hands", forearm="forearms"))) -> inter_dist_boxes
+saveRDS(inter_dist_boxes, file="inter_dist_boxes.rds")
+
+#combined plot
+intra_inter_beta_plot = ggarrange(intra_inter_samesite_plot + rremove("xlab") + theme(legend.position = "none", text = element_text(size=16)), intra_inter_h_vs_f_plot + rremove("ylab") + rremove("xlab") + theme(axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none", text = element_text(size=16)), widths=c(2,1))
+ggsave(intra_inter_beta_plot, file="intra_inter_betaplot.pdf", width=11, height=5)
+
+#beta div per subject
+bray_mat %>% 
+  rownames_to_column("sample_id_1") %>% 
+  pivot_longer(-sample_id_1, names_to="sample_id_2", values_to = "dist") %>% 
+  left_join(meta_sol_paper1 %>% select(
+    sample_id_1 = sampleid, subject_id_1 = subjectid, sample_round_1 = sample_round, skinsite_1 = skinsite)) %>% 
+  left_join(meta_sol_paper1 %>% select(
+    sample_id_2 = sampleid, subject_id_2 = subjectid, sample_round_2 = sample_round, skinsite_2 = skinsite)) %>%
+  filter(sample_id_1 != sample_id_2) %>% group_by(subject_id_1, sample_round_1, skinsite_1) %>% 
+  ggplot(aes(x=subject_id_1, y=dist)) + geom_boxplot(fill="#ecb775") + facet_wrap(~skinsite_1, ncol=1) -> betadiv_per_subject
+
+
+#beta div intra-individual over time
+load("inter_intra_distances.rds")
+inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Hands vs Forearms" & same_time=="Same_time" & same_individual=="Within") %>% group_by(sample_round_1) -> intra_individ_over_time
+
+names(which(rowSums(table(sample_data(ps_sol_paper1_clean_rarefied)$subjectid, sample_data(ps_sol_paper1_clean_rarefied)$sample_round))>3)) -> bestids #all subjects that have both hand and forearm in at least one round
+baseline_best = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==1 & subjectid %in% bestids)
+baseline_best = prune_taxa(taxa_sums(baseline_best)>0, baseline_best)
+round2_best = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==2 & subjectid %in% bestids)
+round2_best = prune_taxa(taxa_sums(round2_best)>0, round2_best)
+round3_best = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==3 & subjectid %in% bestids)
+round3_best = prune_taxa(taxa_sums(round3_best)>0, round3_best)
+
+
+#beta intra vs inter figure 4
+inter_intra_distances <- readRDS("PATH/inter_intra_distances.rds")
+
+fig4_a <- inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Same_skinsite" & same_time=="Over time" & same_individual=="Within") %>% group_by(sample_round_1) %>% ggplot(aes(x=reorder(skinsite_1, dist), y=dist, fill=skinsite_1)) + geom_boxplot() + scale_fill_discrete( name = "Skin site", labels = c("hands", "forearms")) + labs(x="", y="Bray-Curtis distance (intra-individual)") + theme_bw() + theme(axis.text.x = element_blank()) + ylim(0.35, 0.97)
+fig4_b <- inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Hands vs Forearms" & same_time=="Same_time" & same_individual=="Within") %>% group_by(sample_round_1) %>% ggplot(aes(x=sample_round_1, y=dist, fill=sample_round_1)) + geom_boxplot() + scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + labs(x="", y="Bray-Curtis distance (H-to-F)") + theme_bw() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + ylim(0.35, 0.97)
+fig4_c <- readRDS("PATH/inter_dist_boxes.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
+fig4_d <- readRDS("PATH/beta_disp_boxplot.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
+fi4_all <- ggarrange(fig4_a + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), fig4_b + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), fig4_c + theme(legend.position = "none", strip.text=element_text(size=11)), fig4_d + theme(legend.position = "none", strip.text=element_text(size=11)), ncol=2, nrow=2, labels=c("A", "B", "C", "D"))
+ggsave(fig4_all, dpi=300, filename = "fig4_all.pdf", useDingbats=FALSE, width=7, height=7, units="in")
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+sessionInfo()
+
