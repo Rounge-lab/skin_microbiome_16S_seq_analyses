@@ -14,7 +14,7 @@ ps_baseline <- ps_soldiers_paper1_clean %>%
   transform_sample_counts(function(x) x / sum(x) * 100) #relative abundances
 
 #phyloseq object: hands only
-ps_hands = <- ps_baseline %>%
+ps_hands <- ps_baseline %>%
   subset_samples(skinsite == "hands") %>%
   prune_taxa(taxa_sums(.) != 0, .)
 #phyloseq object: forearms only
