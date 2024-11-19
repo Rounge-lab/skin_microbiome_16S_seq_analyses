@@ -166,12 +166,7 @@ for metric in richness_metrics {
 
 ## BETA DIVERSITY ----------------------------------------------------------------------------------------------------------------------------------------------
 
-#load rarefied objects if not already loaded
-load("ps_sol_paper1_clean_rarefied.RData")#load rarefied phyloseq object
-load("hands_paper1_clean_rarefied.RData")
-load("forearms_paper1_clean_rarefied.RData")
-
-#test all factors, how much they influence microbiome composition (PERMANOVA)
+# Test all factors, how much they influence microbiome composition (PERMANOVA)
 bray = phyloseq::distance(ps_sol_paper1_clean_rarefied, method="bray") #dissimilarity matrix
 test.adonis = adonis2(bray ~ subjectid + sample_round + skinsite + extraction_batch, data = data.frame(
   sample_data(ps_sol_paper1_clean_rarefied)), permutations = 999, by="margin") #by="margin" would test each term against each other
