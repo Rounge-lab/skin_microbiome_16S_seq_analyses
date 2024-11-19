@@ -194,7 +194,7 @@ adonis_batch_hands <- perform_permanova(bray_hands, 'extraction_batch', data.fra
 adonis_batch_forearms <- perform_permanova(bray_forearms, 'extraction_batch', data.frame(sample_data(f_clean_rare))) #batch effects forearms
                           
 
-
+## PCOA plotting
 
 #PCOA plot of beta diversity, including stat results
 pcoa_hands = ordinate(hands_clean_rare, method="PCoA", distance=bray_hands, formula = ~ sample_round+extraction_batch) #PCoA results
@@ -227,12 +227,32 @@ betaplot_batch_h= plot_ordination(hands_clean_rare, pcoa_hands, color = "extract
 beta_hands_batch = betaplot_batch_h + annotation_custom(grobTree(textGrob("R² = 0.05568, p = 0.022", x=0.03, y=0.98, hjust=0, gp=gpar(col="black", fontsize=8))))
 beta_comb_batch = ggarrange(beta_hands_batch, beta_forearm_batch, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="right", align="hv")
 
-#combined beta div plot
-beta_comb = ggarrange(beta_hands, beta_forearms, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="bottom", align="hv") + geom_point(size=2)
-beta_comb = beta_comb + geom_point(size=1)
+#combined beta div plot (Fig. 4)
+beta_comb = ggarrange(beta_hands, beta_forearms, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="bottom", align="hv") + geom_point(size=1)
 ggsave(beta_comb, file="beta_div_combined_paper1.pdf", width=7.5, height=4)
 
-#Beta dispersion: check whether equal variance between group; if not use ANOSIM instead of permanova
+
+# beta div hands vs forearms (Fig. S7)
+baseline_all = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==1) %>% prune_taxa(taxa_sums(.)>0, .)
+bray_base = phyloseq::distance(baseline_all, method="bray")
+pcoa_base = ordinate(baseline_all, method="PCoA", distance=bray_base, formula = ~skinsite+extraction_batch)
+bray_base_skinsite <- plot_ordination(baseline_all, pcoa_base, color="skinsite") + 
+                          stat_ellipse() + theme_bw() + geom_point(size=3) + labs(color="Skin site") + scale_color_discrete(labels=c("hands", "forearms")) 
+
+# permanova test for statistical difference
+adonis_skinsite <- perform_permanova(bray_base, 'skinsite + subjectid + extraction_batch', data.frame(sample_data(baseline_all)), by="margin")
+bray_base_skinsite <- bray_base_skinsite + annotation_custom(grobTree(textGrob("R² = 0.08313, p = 0.003", x=0.03, y=0.06, hjust=0, gp=gpar(col="black", fontsize=10))))
+
+# Combined alpha and beta div for skin site comparison baseline (Fig. S7)
+ggarrange(alpha_skinsite_base, bray_base_skinsite, labels=c("A", "B"), ncol=1, nrow=2) -> base_hand_v_forearm
+ggsave(base_hand_v_forearm, filename = "baseline_hand_vs_forearm.pdf", height=5, width=6)
+             
+
+
+## Intra-individual vs inter-individual
+
+
+## Beta dispersion
 f_dispersion = betadisper(bray_forearms, data.frame(sample_data(f_clean_rare))$sample_round, type = "centroid")
 f_disp_test = permutest(f_dispersion, pairwise=TRUE, permutations=999)
 anosim_results = anosim(bray_forearms, data.frame(sample_data(f_clean_rare))$sample_round, permutations = 999)
@@ -256,7 +276,7 @@ beta_disp_forearms = data.frame(
 )
 disp_combined = rbind(beta_disp_hands, beta_disp_forearms)
 
-#beta dispersion boxplot (soldier similarity over time)
+# Beta dispersion boxplot (soldier similarity over time)
 betadisp_boxes = ggplot(disp_combined, aes(x=round, y=beta_disp, fill=round)) +
   geom_boxplot() +
   facet_wrap(~reorder(site,beta_disp)) +
@@ -266,28 +286,9 @@ betadisp_boxes = ggplot(disp_combined, aes(x=round, y=beta_disp, fill=round)) +
 ggsave(betadisp_boxes, filename="beta_disp_boxplot.pdf")
 saveRDS(betadisp_boxes, file="beta_disp_boxplot.rds")
 
-#beta div hands vs forearms (Fig. S7)
-baseline_all = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==1)
-baseline_all = prune_taxa(taxa_sums(baseline_all)>0, baseline_all)
-bray_base = phyloseq::distance(baseline_all, method="bray")
-pcoa_base = ordinate(baseline_all, method="PCoA", distance=bray_base, formula = ~skinsite+extraction_batch)
-plot_ordination(baseline_all, pcoa_base, color="skinsite") + stat_ellipse() + theme_bw() + geom_point(size=3) + labs(color="Skin site") + scale_color_discrete(labels=c("hands", "forearms")) -> bray_base_skinsite
-
-#permanova test for statistical difference
-test.adonis = adonis2(bray_base ~ skinsite + subjectid + extraction_batch, data = data.frame(sample_data(baseline_all)), permutations = 999, by="margin") #by="margin" would test each term against each other #by="margin" would test each term against each other
-test.adonis #R² is the percentage of variance explained by the rounds
-adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
-bray_base_skinsite <- bray_base_skinsite + annotation_custom(grobTree(textGrob("R² = 0.08313, p = 0.003", x=0.03, y=0.06, hjust=0, gp=gpar(col="black", fontsize=10))))
-
-# Combined alpha and beta div for skin site comparison baseline (Fig. S7)
-ggarrange(alpha_skinsite_base, bray_base_skinsite, labels=c("A", "B"), ncol=1, nrow=2) -> base_hand_v_forearm
-ggsave(base_hand_v_forearm, filename = "baseline_hand_vs_forearm.pdf", height=5, width=6)
-             
-
-
-#beta div intra vs inter
-bray = phyloseq::distance(ps_sol_paper1_clean_rarefied, method="bray")
-bray_mat = as.matrix(bray) %>% as.data.frame()
+## Bray-Curtis distances within vs between
+                          
+bray_mat = as.matrix(bray_all) %>% as.data.frame()
 rownames(bray_mat) = as.numeric(rownames(bray_mat))
 meta_sol_paper1 = data.frame(sample_data(ps_sol_paper1_clean_rarefied))
 meta_sol_paper1$sampleid = as.character(meta_sol_paper1$sampleid)
