@@ -267,38 +267,12 @@ plot_ordination(baseline_all, pcoa_base, color="skinsite") + stat_ellipse() + th
 test.adonis = adonis2(bray_base ~ skinsite + subjectid + extraction_batch, data = data.frame(sample_data(baseline_all)), permutations = 999, by="margin") #by="margin" would test each term against each other #by="margin" would test each term against each other
 test.adonis #R² is the percentage of variance explained by the rounds
 adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
-bray_base_skinsite = bray_base_skinsite + annotation_custom(grobTree(textGrob("R² = 0.08313, p = 0.003", x=0.03, y=0.06, hjust=0, gp=gpar(col="black", fontsize=10))))
+bray_base_skinsite <- bray_base_skinsite + annotation_custom(grobTree(textGrob("R² = 0.08313, p = 0.003", x=0.03, y=0.06, hjust=0, gp=gpar(col="black", fontsize=10))))
 
-#combined alpha beta for skin site comparison baseline
+# Combined alpha and beta div for skin site comparison baseline (Fig. S7)
 ggarrange(alpha_skinsite_base, bray_base_skinsite, labels=c("A", "B"), ncol=1, nrow=2) -> base_hand_v_forearm
 ggsave(base_hand_v_forearm, filename = "baseline_hand_vs_forearm.pdf", height=5, width=6)
-
-
-#beta div comparing ordination methods
-library("plyr")
-dist="bray" #bray curtis distance
-ord_meths=c("DCA", "CCA", "RDA", "NMDS", "MDS", "PCoA") #all (non-phylogenic) ordination methods 
-set.seed(123)
-plist = llply(as.list(ord_meths), function(i, physeq, dist){
-  ordi=ordinate(physeq, method=i, distance=dist, formula= ~ sample_round + extraction_batch)
-  plot_ordination(physeq, ordi, "samples", color="sample_round")
-}, f_clean_rare, dist) #change this depending on phyloseq object
-names(plist) <- ord_meths
-
-pdataframe = ldply(plist, function(x){
-  df = x$data[, 1:2]
-  colnames(df) = c("Axis_1", "Axis_2")
-  return(cbind(df,x$data))
-})
-names(pdataframe)[1] ="method"
-
-p = ggplot(pdataframe, aes(Axis_1, Axis_2, color=sample_round, fill=sample_round)) #shape=skinsite
-p = p + geom_point(size=3) + scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + scale_color_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) 
-p = p + facet_wrap(~method, scales="free")
-p = p + geom_line(aes(group=subjectid), color="darkgray", lty="dashed") 
-ellipse = p + stat_ellipse(aes(group=sample_round))
-saveRDS(ellipse, file="ordination_methods_plot_forearms.rds")
-poly = p + geom_polygon()                    
+             
 
 
 #beta div intra vs inter
@@ -324,7 +298,9 @@ bray_within_between_samesite = bray_mat %>%
                                sample_round_1 != sample_round_2 ~"Over time")) %>%
   filter(sample_id_1 != sample_id_2) ##remove dist to the same sample
 
-bray_within_between_samesite %>% mutate(pair_id = paste(pmin(sample_id_1, sample_id_2), pmax(sample_id_1, sample_id_2), sep="_")) %>% distinct(pair_id, .keep_all = TRUE) -> inter_intra_distances
+inter_intra_distances <- bray_within_between_samesite %>% 
+  mutate(pair_id = paste(pmin(sample_id_1, sample_id_2), pmax(sample_id_1, sample_id_2), sep="_")) %>% 
+  distinct(pair_id, .keep_all = TRUE)
 
 bray_within_between_samesite %>% 
   group_by(same_individual, same_site, subject_id_1, skinsite_1) %>% 
@@ -341,49 +317,54 @@ bray_within_between_samesite %>%
   ggplot(aes(x=reorder(same_individual, mean_dist),y=mean_dist, fill=same_individual)) + 
   geom_boxplot() + facet_wrap(~same_site) + labs(y="Bray-Curtis distance") + scale_fill_manual(values=c("#9e4f4a", "#ecb775")) -> intra_inter_h_vs_f_plot
 
-#between-distance over time, for each skinsite
+# Combined plot
+intra_inter_beta_plot <- ggarrange(intra_inter_samesite_plot + rremove("xlab") + theme(legend.position = "none", text = element_text(size=16)), 
+                                   intra_inter_h_vs_f_plot + rremove("ylab") + rremove("xlab") + 
+                                   theme(axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none", text = element_text(size=16)), widths=c(2,1))
+ggsave(intra_inter_beta_plot, file="intra_inter_betaplot.pdf", width=11, height=5)
+
+
+# Beta div intra-individual over time Fig. 5
+#load("inter_intra_distances.rds")
+inter_intra_distances <- readRDS("PATH/inter_intra_distances.rds")
+
+#between-distance over time, for each skinsite (Fig 5C)
 inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Same_skinsite" & same_individual=="Between" & same_time=="Same_time") -> inter_dist
 inter_dist %>% ggplot(aes(x=sample_round_1, y=dist, fill=sample_round_1)) + geom_boxplot() + scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name="Sample round", labels=c("Baseline", "Post exercise", "3W Post exercise")) + labs(x="", y="Bray-Curtis distance (inter-individual)") + theme_bw() + facet_wrap(~skinsite_1, labeller=labeller(skinsite_1 = c(hands="hands", forearm="forearms"))) -> inter_dist_boxes
 saveRDS(inter_dist_boxes, file="inter_dist_boxes.rds")
 
-#combined plot
-intra_inter_beta_plot = ggarrange(intra_inter_samesite_plot + rremove("xlab") + theme(legend.position = "none", text = element_text(size=16)), intra_inter_h_vs_f_plot + rremove("ylab") + rremove("xlab") + theme(axis.ticks.y = element_blank(), axis.text.y = element_blank(), legend.position = "none", text = element_text(size=16)), widths=c(2,1))
-ggsave(intra_inter_beta_plot, file="intra_inter_betaplot.pdf", width=11, height=5)
-
-#beta div per subject
-bray_mat %>% 
-  rownames_to_column("sample_id_1") %>% 
-  pivot_longer(-sample_id_1, names_to="sample_id_2", values_to = "dist") %>% 
-  left_join(meta_sol_paper1 %>% select(
-    sample_id_1 = sampleid, subject_id_1 = subjectid, sample_round_1 = sample_round, skinsite_1 = skinsite)) %>% 
-  left_join(meta_sol_paper1 %>% select(
-    sample_id_2 = sampleid, subject_id_2 = subjectid, sample_round_2 = sample_round, skinsite_2 = skinsite)) %>%
-  filter(sample_id_1 != sample_id_2) %>% group_by(subject_id_1, sample_round_1, skinsite_1) %>% 
-  ggplot(aes(x=subject_id_1, y=dist)) + geom_boxplot(fill="#ecb775") + facet_wrap(~skinsite_1, ncol=1) -> betadiv_per_subject
-
-
-#beta div intra-individual over time
-load("inter_intra_distances.rds")
-inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Hands vs Forearms" & same_time=="Same_time" & same_individual=="Within") %>% group_by(sample_round_1) -> intra_individ_over_time
-
-names(which(rowSums(table(sample_data(ps_sol_paper1_clean_rarefied)$subjectid, sample_data(ps_sol_paper1_clean_rarefied)$sample_round))>3)) -> bestids #all subjects that have both hand and forearm in at least one round
-baseline_best = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==1 & subjectid %in% bestids)
-baseline_best = prune_taxa(taxa_sums(baseline_best)>0, baseline_best)
-round2_best = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==2 & subjectid %in% bestids)
-round2_best = prune_taxa(taxa_sums(round2_best)>0, round2_best)
-round3_best = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==3 & subjectid %in% bestids)
-round3_best = prune_taxa(taxa_sums(round3_best)>0, round3_best)
-
-
-#beta intra vs inter figure 4
-inter_intra_distances <- readRDS("PATH/inter_intra_distances.rds")
-
-fig4_a <- inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Same_skinsite" & same_time=="Over time" & same_individual=="Within") %>% group_by(sample_round_1) %>% ggplot(aes(x=reorder(skinsite_1, dist), y=dist, fill=skinsite_1)) + geom_boxplot() + scale_fill_discrete( name = "Skin site", labels = c("hands", "forearms")) + labs(x="", y="Bray-Curtis distance (intra-individual)") + theme_bw() + theme(axis.text.x = element_blank()) + ylim(0.35, 0.97)
-fig4_b <- inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Hands vs Forearms" & same_time=="Same_time" & same_individual=="Within") %>% group_by(sample_round_1) %>% ggplot(aes(x=sample_round_1, y=dist, fill=sample_round_1)) + geom_boxplot() + scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + labs(x="", y="Bray-Curtis distance (H-to-F)") + theme_bw() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + ylim(0.35, 0.97)
-fig4_c <- readRDS("PATH/inter_dist_boxes.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
-fig4_d <- readRDS("PATH/beta_disp_boxplot.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
-fi4_all <- ggarrange(fig4_a + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), fig4_b + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), fig4_c + theme(legend.position = "none", strip.text=element_text(size=11)), fig4_d + theme(legend.position = "none", strip.text=element_text(size=11)), ncol=2, nrow=2, labels=c("A", "B", "C", "D"))
-ggsave(fig4_all, dpi=300, filename = "fig4_all.pdf", useDingbats=FALSE, width=7, height=7, units="in")
+fig5_a <- inter_intra_distances %>%
+  as.data.frame() %>%
+  filter(same_site == "Same_skinsite" & same_time == "Over time" & same_individual == "Within") %>%
+  group_by(sample_round_1) %>%
+  ggplot(aes(x = reorder(skinsite_1, dist), y = dist, fill = skinsite_1)) + 
+  geom_boxplot() + 
+  scale_fill_discrete(name = "Skin site", labels = c("hands", "forearms")) + 
+  labs(x = "", y = "Bray-Curtis distance (intra-individual)") + 
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + 
+  ylim(0.35, 0.97)
+                        
+fig5_b <- inter_intra_distances %>%
+  as.data.frame() %>%
+  filter(same_site == "Hands vs Forearms" & same_time == "Same_time" & same_individual == "Within") %>%
+  group_by(sample_round_1) %>%
+  ggplot(aes(x = sample_round_1, y = dist, fill = sample_round_1)) +
+  geom_boxplot() + 
+  scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + 
+  labs(x="", y="Bray-Curtis distance (H-to-F)") + 
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + 
+  ylim(0.35, 0.97)
+          
+fig5_c <- readRDS("PATH/inter_dist_boxes.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
+fig5_d <- readRDS("PATH/beta_disp_boxplot.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
+fig5_all <- ggarrange(fig5_a + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), 
+                     fig5_b + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), 
+                     fig5_c + theme(legend.position = "none", strip.text=element_text(size=11)), 
+                     fig5_d + theme(legend.position = "none", strip.text=element_text(size=11)), 
+                     ncol=2, nrow=2, labels=c("A", "B", "C", "D"))
+ggsave(fig5_all, dpi=300, filename = "Figure5.pdf", useDingbats=FALSE, width=7, height=7, units="in")
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
