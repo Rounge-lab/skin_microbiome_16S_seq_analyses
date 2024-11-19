@@ -14,11 +14,9 @@ library(emmeans)
 library(plyr)
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
 # Import already cleaned and rarefied phyloseq objects for each site
 load("hands_paper1_clean_rarefied.RData")
 load("forearms_paper1_clean_rarefied.RData")
-
 
 ## ALPHA DIVERSITY -------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -112,14 +110,15 @@ fig_all_hands <- create_alpha_div_plot(all_round_hands, scales="free", legend_po
 fig_all_forearm <- create_alpha_div_plot(all_round_forearms, scales="free_y", legend_pos="bottom")
 
 # Combine plot for hands and forearm (Fig. 3)
-alphadiv_sha_inv = ggarrange(fig_all_hands, fig_all_forearm, labels=c("A", "B"), ncol=1, nrow=2, common.legend = TRUE, legend="bottom", align = "hv") + theme(legend.position = "bottom")
+alphadiv_sha_inv <- ggarrange(fig_all_hands, fig_all_forearm, labels=c("A", "B"), ncol=1, nrow=2, common.legend = TRUE, legend="bottom", align = "hv") + theme(legend.position = "bottom")
 ggsave(alphadiv_sha_inv, file="Figure3.pdf", width=210, units="mm", height=150) #A4 width
 
 
+## SUPPLEMENTARY Fig. S7 A
 
-#Alpha div hands vs forearms (supplementary Fig. S7)
-load("ps_sol_paper1_clean_rarefied.RData") #if not already loaded
-all_rounds= data.frame("sampleid" = phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$sampleid, 
+# Alpha div hands vs forearms data frame
+load("ps_sol_paper1_clean_rarefied.RData") #phyloseq object with both skin sites, if not already loaded
+alpha_both_sites = data.frame("sampleid" = phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$sampleid, 
                        "subjectid" = phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$subjectid, 
                        "Observed" = phyloseq::estimate_richness(ps_sol_paper1_clean_rarefied, measures = "Observed"),
                        "Shannon" = phyloseq::estimate_richness(ps_sol_paper1_clean_rarefied, measures = "Shannon"),
@@ -127,12 +126,9 @@ all_rounds= data.frame("sampleid" = phyloseq::sample_data(ps_sol_paper1_clean_ra
                        "sample_round" = factor(phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$sample_round),
                        "batch" = factor(phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$extraction_batch),
                        "skinsite" = factor(phyloseq::sample_data(ps_sol_paper1_clean_rarefied)$skinsite))
-#plot alpha div for hands vs forearms over time
-all_rounds %>%
-  ggplot(aes(x=skinsite, y=Shannon), fill = skinsite) +
-  geom_boxplot(aes(fill=skinsite)) + facet_wrap(~sample_round)
-#plot baseline alpha div hands vs forearms
-all_rounds %>% filter(sample_round==1) -> baseline_data
+
+# Plot baseline alpha div hands vs forearms
+alpha_both_sites %>% filter(sample_round==1) -> baseline_data
 baseline_data %>% 
   gather(key=metric, value=value, c("Observed", "Shannon", "InvSimpson")) %>%
   mutate(metric=factor(metric, levels = c("Observed", "Shannon", "InvSimpson"))) %>%
@@ -140,18 +136,30 @@ baseline_data %>%
   geom_boxplot(outlier.color="grey", aes(group = skinsite, fill= skinsite)) +
   geom_jitter(height=0, width=0) + 
   facet_wrap(~ metric, scales = "free") +
-  theme_bw() + labs(fill="Skin site", y="Alpha diversity", x="") + theme(axis.text.x = element_blank()) + scale_fill_discrete(labels=c("hands", "forearms")) + 
+  labs(fill="Skin site", y="Alpha diversity", x="") +
+  theme_bw() + 
+  theme(axis.text.x = element_blank()) + 
+  scale_fill_discrete(labels=c("hands", "forearms")) + 
   scale_y_continuous(expand=expansion(mult=c(0.05,0.05))) -> alpha_skinsite_base
+ggsave(alpha_skinsite_base, file="FigureS7A.pdf")
 
-#testing alpha div difference
-#linear mixed effects model
-library(nlme)
-model_skinsite = lme(InvSimpson ~ skinsite + batch, random= ~1 | subjectid, data = baseline_data) #change metric
-summary(model_skinsite)$tTable #p-values
-emmeans(model_skinsite, specs = pairwise ~ skinsite)
+# Testing alpha div difference between sites for each metric
+for metric in richness_metrics {
+  # Fit the linear mixed effects model using dynamically created formula
+  model_skinsite <- lme(as.formula(paste(metric, "~ skinsite + batch")), random = ~ 1 | subjectid, data = baseline_data, method = "REML")
+  
+  # Extract and print the model summary (p-values)
+  summary_res <- summary(model_skinsite)$tTable
+  cat("Summary for metric:", metric, "\n")
+  print(summary_res)
+  
+  # Get and print estimated marginal means
+  emmeans_res <- emmeans(model_skinsite, specs = pairwise ~ skinsite)
+  cat("\nEstimated marginal means for metric:", metric, "\n")
+  print(emmeans_res)
+  cat("\n") # Add a new line for better readability
+}
 
-#alpha div testing unadjusted
-wilcox.observed = pairwise.wilcox.test(all_rounds_hands$Observed, sample_data(hands_clean_rare)$sample_round, p.adjust.method = "BH")
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------------------
 
