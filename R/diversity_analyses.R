@@ -218,7 +218,7 @@ beta_forearms <- create_betaplot(f_clean_rare, pcoa_forearms, "R = 0.458, p < 0.
 
 # Combined beta div plot (Fig. 4)
 beta_comb = ggarrange(beta_hands, beta_forearms, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="bottom", align="hv") + geom_point(size=1)
-ggsave(beta_comb, file="beta_div_combined_paper1.pdf", width=7.5, height=4)
+ggsave(beta_comb, file="Figure4.pdf", width=7.5, height=4)
 
 
 ## Batch comparison
@@ -257,7 +257,7 @@ bray_base_skinsite <- bray_base_skinsite + annotation_custom(grobTree(textGrob("
 
 # Combined alpha and beta div for skin site comparison baseline (Fig. S7)
 ggarrange(alpha_skinsite_base, bray_base_skinsite, labels=c("A", "B"), ncol=1, nrow=2) -> base_hand_v_forearm
-ggsave(base_hand_v_forearm, filename = "baseline_hand_vs_forearm.pdf", height=5, width=6)
+ggsave(base_hand_v_forearm, filename = "FigureS7", height=5, width=6)
              
 
 
