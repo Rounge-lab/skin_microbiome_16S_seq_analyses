@@ -9,6 +9,9 @@ library(phyloseq)
 library(grid)
 library(ggpubr)
 library(vegan)
+library(nlme)
+library(emmeans)
+library(plyr)
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
