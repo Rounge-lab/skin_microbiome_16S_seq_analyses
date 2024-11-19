@@ -41,33 +41,45 @@ create_alphadiv_df <- function(physeq_obj, metrics) {
 
 # Create data frames with diversity metrics
 all_rounds_hands <- create_alphadiv_df(hands_clean_rare, richness_metrics) #hands alpha div
-all_rounds_forearm <- create_alphadiv_df(f_clean_rare, richness_metrics) #forearms alpha div
+all_rounds_forearms <- create_alphadiv_df(f_clean_rare, richness_metrics) #forearms alpha div
 
+## STATISTICS ## 
 
-#linear mixed effects models
-model_h_obs = lme(Observed ~ sample_round+batch, random = ~ 1 + sample_round | subject.id, data = all_rounds_hands, method="REML") #REML is default, random effect includes random intercept and slope
-model_h_sha = lme(Shannon ~ sample_round+batch, random = ~ 1 + sample_round | subject.id, data = all_rounds_hands, method="REML")
-model_h_inv = lme(InvSimpson ~ sample_round+batch, random = ~ 1 + sample_round | subject.id, data = all_rounds_hands, method="REML")
-summary(model_h_obs)
-#model_summary$tTable #stat values
+# Function to fit linear mixed effects models for a given richness metric and design variable
+fit_mixed_effects_models <- function(df, metrics, design_var) {
+  models <- list()
+  emmeans_list <- list()
+  
+  for (metric in metrics) {
+    response_var <- if (metric == "InvSimpson") "Inverse_Simpson" else metric  # Handle naming inconsistency
+    formula <- as.formula(paste(response_var, "~", design_var, "+ batch"))
+    model_name <- paste0("model_h_", tolower(substr(response_var, 1, 3)))
+    emmeans_name <- paste0("emmeans_", tolower(substr(response_var, 1, 3)))
 
-#estimated marginal means and contrast between each sample round pair in the linear model above
-emmeans_obs = emmeans(model_h_obs, specs = pairwise ~ sample_round) 
-emmeans_shannon = emmeans(model_h_sha, specs = pairwise ~ sample_round)
-emmeans_invsimpson = emmeans(model_h_inv, specs = pairwise ~ sample_round)
+    models[[model_name]] <- lme(formula, random = ~ 1 + get(design_var) | subjectid, data = df, method = "REML") #fit model, including subjectid as random effect
+    emmeans_list[[emmeans_name]] <- emmeans(models[[model_name]], specs = pairwise ~ design_var) #estimated marginal means and contrast between each sample round pair in the linear model
+    
+    # Print summary of the model
+    print(paste("Summary for model:", model_name))
+    print(summary(models[[model_name]]))
+  }
+  
+  # Return models and emmeans
+  return(list(models = models, emmeans_list = emmeans_list))
+}
 
-#emmeans significance plot
-p = pwpp(emmeans_invsimpson, sort=F)
-p + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3")) + geom_vline(xintercept = 0.05, lty="dashed") + labs(y="Sample round")
+# Get the linear mixed effects models and emmeans for each skin site
+lme_hands <- fit_mixed_effects_models(all_rounds_hands, richness_metrics, "sample_round")
+lme_forearms <- fit_mixed_effects_models(all_rounds_forearms, richness_metrics, "sample_round")
+models_hands <- lme_hands$models
+emmeans_hands <- lme_hands$emmeans_list
+models_forearms <- lme_forearms$models
+emmeans_forearms <- lme_forearms$emmeans_list
 
-#alpha div emmeans plot
-emmeans_df = as.data.frame(emmeans_obs)
-emmeans_df = emmeans_df %>% select(-contrast) %>% head(3)
-p = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=c(336,397,380), ymax=c(436,556,609)), width=0.2) + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"))
+                       
+                
 
-
-
-#PLOTTING alpha div
+#PLOTTING 
 
 #All rounds HANDS alpha div figure
 fig_all_hands = all_rounds_hands %>% 
@@ -86,35 +98,6 @@ fig_all_hands = all_rounds_hands %>%
   scale_y_continuous(expand = expansion(mult=c(0.1,0.1)))
 
 #FOREARM alpha div
-
-model_f_obs = lme(Observed ~ sample_round+batch, random = ~ 1 | subjectid, data = all_rounds_forearm, method="REML") #REML is default, random effect includes only random intercept, error if both
-model_f_sha = lme(Shannon ~ sample_round+batch, random = ~ 1 + sample_round | subjectid, data = all_rounds_forearm, method="REML")
-model_f_inv = lme(InvSimpson ~ sample_round+batch, random = ~ 1 + sample_round | subjectid, data = all_rounds_forearm, method="REML")
-summary(model_h)
-model_summary$tTable #stat values
-emmeans_obs_f = emmeans(model_f_obs, specs = pairwise ~ sample_round) #estimated marginal means and contrast between each sample round pair in the lme
-emmeans_shannon_f = emmeans(model_f_sha, specs = pairwise ~ sample_round)
-emmeans_invsimpson_f = emmeans(model_f_inv, specs = pairwise ~ sample_round)
-
-#emmeans significance plot
-p = pwpp(emmeans_obs, sort=F)
-p + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3")) + geom_vline(xintercept = 0.05, lty="dashed") + labs(y="Sample round")
-
-#alpha div emmeans plot
-emmeans_df = as.data.frame(emmeans_invsimpson_f)
-emmeans_df = emmeans_df %>% select(-contrast) %>% head(3)
-p_obs = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=lower.CL, ymax=upper.CL), width=0.2) + 
-  scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) + 
-  geom_segment(aes(x=1, xend=3, y=620, yend=620), color="black", lwd=0.1) + annotate("text", x=2, y=625, label="p=0.0455", size=3) + labs(x="") #annotation for hand obs plot
-
-p_sha = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=lower.CL, ymax=upper.CL), width=0.2) + 
-  scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) 
-#+ geom_segment(aes(x=1, xend=2, y=5, yend=5), color="black", lwd=0.1) + annotate("text", x=1.5, y=5.2, label="p=0.0024", size=3) + labs(x="") + geom_segment(aes(x=1, xend=3, y=5, yend=5), color="black", lwd=0.1) + annotate("text", x=2, y=5.2, label="p=0.0002", size=3) + labs(x="")
-
-p_inv = ggplot(emmeans_df, aes(x=sample_round, y=emmean, color=sample_round)) + geom_point(size=3) + geom_errorbar(aes(ymin=lower.CL, ymax=upper.CL), width=0.2) + scale_color_manual(values=c("azure3", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) + labs(x="")
-
-ggarrange(p_obs + rremove("xlab") + ylab("Estimated marginal means"), p_sha + rremove("ylab") , p_inv + rremove("xlab")+ rremove("ylab"), ncol=3, nrow=1, common.legend = TRUE, legend="bottom", align = "hv", font.label = list(size=12, color="black", face="bold", family=NULL))
-
 
 fig_all_forearm = all_rounds_forearm %>% 
   gather(key=metric, value=value, c("Shannon", "InvSimpson")) %>%
