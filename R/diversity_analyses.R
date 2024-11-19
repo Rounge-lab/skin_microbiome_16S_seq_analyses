@@ -196,43 +196,55 @@ adonis_batch_forearms <- perform_permanova(bray_forearms, 'extraction_batch', da
 
 ## PCOA plotting
 
-#PCOA plot of beta diversity, including stat results
-pcoa_hands = ordinate(hands_clean_rare, method="PCoA", distance=bray_hands, formula = ~ sample_round+extraction_batch) #PCoA results
-pcoa_forearms = ordinate(f_clean_rare, method="PCoA", distance=bray_forearms, formula = ~ sample_round+extraction_batch) #PCoA results
-pcoa_all = ordinate(ps_sol_paper1_clean_rarefied, method="PCoA", distance=bray, formula = ~sample_round + skinsite+extraction_batch)
+# Function to create PCoA plot
+create_betaplot <- function(ps, pcoa_data, annotation_text) {
+  plot_ordination(ps, pcoa_data, color = "sample_round") + 
+    geom_line(aes(group=subjectid), color="darkgray", lty="dashed") +
+    stat_ellipse() + 
+    scale_color_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + 
+    theme_bw() + 
+    geom_point(size=2) +
+    annotation_custom(grobTree(textGrob(annotation_text, x=0.02, y=0.96, hjust=0, gp=gpar(col="black", fontsize=8))))
+}
 
-betaplot_f = plot_ordination(f_clean_rare, pcoa_forearms, color = "sample_round") + 
-  geom_line(aes(group=subjectid), color="darkgray", lty="dashed") +
-  stat_ellipse() + 
-  scale_color_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + theme_bw() + geom_point(size=2)
-betaplot_h = plot_ordination(hands_clean_rare, pcoa_hands, color = "sample_round") + 
-  geom_line(aes(group=subjectid), color="darkgray", lty="dashed") +
-  stat_ellipse() + 
-  scale_color_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) + theme_bw() + geom_point(size=2)
-#+ theme(strip.background = element_blank())
-beta_hands = betaplot_h + annotation_custom(grobTree(textGrob("R = 0.429, p < 0.001", x=0.02, y=0.96, hjust=0, gp=gpar(col="black", fontsize=8))))
-beta_forearms = betaplot_f + annotation_custom(grobTree(textGrob("R = 0.458, p < 0.001", x=0.02, y=0.96, hjust=0, gp=gpar(col="black", fontsize=8))))
+# Calculate PCoA results
+# pcoa_all = ordinate(ps_sol_paper1_clean_rarefied, method="PCoA", distance=bray, formula = ~ sample_round + skinsite + extraction_batch)
+pcoa_hands = ordinate(hands_clean_rare, method="PCoA", distance=bray_hands, formula = ~ sample_round + extraction_batch) 
+pcoa_forearms = ordinate(f_clean_rare, method="PCoA", distance=bray_forearms, formula = ~ sample_round + extraction_batch)
 
-#batch comparison
-betaplot_batch_f = plot_ordination(f_clean_rare, pcoa_forearms, color = "extraction_batch") + 
-  stat_ellipse() + 
-  labs(color="Batch") +
-  scale_color_brewer(palette="Dark2") + geom_point(size=2) + theme_bw()
-beta_forearm_batch = betaplot_batch_f + annotation_custom(grobTree(textGrob("R² = 0.0755, p = 0.187", x=0.03, y=0.98, hjust=0, gp=gpar(col="black", fontsize=8))))
+# Create PCoA plot for each skin site, #statistics found using permanova above
+beta_hands <- create_betaplot(hands_clean_rare, pcoa_hands, "R = 0.429, p < 0.001") 
+beta_forearms <- create_betaplot(f_clean_rare, pcoa_forearms, "R = 0.458, p < 0.001")
 
-betaplot_batch_h= plot_ordination(hands_clean_rare, pcoa_hands, color = "extraction_batch") +
-  stat_ellipse() + 
-  labs(color="Batch") +
-  scale_color_brewer(palette="Dark2") + geom_point(size=2) + theme_bw()
-beta_hands_batch = betaplot_batch_h + annotation_custom(grobTree(textGrob("R² = 0.05568, p = 0.022", x=0.03, y=0.98, hjust=0, gp=gpar(col="black", fontsize=8))))
-beta_comb_batch = ggarrange(beta_hands_batch, beta_forearm_batch, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="right", align="hv")
-
-#combined beta div plot (Fig. 4)
+# Combined beta div plot (Fig. 4)
 beta_comb = ggarrange(beta_hands, beta_forearms, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="bottom", align="hv") + geom_point(size=1)
 ggsave(beta_comb, file="beta_div_combined_paper1.pdf", width=7.5, height=4)
 
 
-# beta div hands vs forearms (Fig. S7)
+## Batch comparison
+
+# Function to create PCOA plot for batch comparison
+create_beta_batch_plot <- function(clean_data, pcoa_data, annotation_text) {
+  plot_ordination(clean_data, pcoa_data, color = "extraction_batch") + 
+    stat_ellipse() + 
+    labs(color = "Batch") +
+    scale_color_brewer(palette = "Dark2") + 
+    geom_point(size = 2) + 
+    theme_bw() + 
+    annotation_custom(grobTree(textGrob(annotation_text, x = 0.03, y = 0.98, hjust = 0, gp = gpar(col = "black", fontsize = 8))))
+}
+
+# Create beta plot for batch comparison for hands and forearms (Fig. S6)
+beta_hands_batch <- create_beta_batch_plot(hands_clean_rare, pcoa_hands, "R² = 0.05568, p = 0.022")
+beta_forearm_batch <- create_beta_batch_plot(f_clean_rare, pcoa_forearms, "R² = 0.0755, p = 0.187")
+# Combine plots
+beta_comb_batch <- ggarrange(beta_hands_batch, beta_forearm_batch, labels = c("A", "B"), ncol = 2, nrow = 1, common.legend = TRUE, legend = "right", align = "hv")
+ggsave(beta_comb_batch, file="FigureS6.pdf", width=7.5, height=4)
+                          
+
+
+# SUPPLEMENTARY Beta div hands vs forearms (Fig. S7)
+
 baseline_all = subset_samples(ps_sol_paper1_clean_rarefied, sample_round==1) %>% prune_taxa(taxa_sums(.)>0, .)
 bray_base = phyloseq::distance(baseline_all, method="bray")
 pcoa_base = ordinate(baseline_all, method="PCoA", distance=bray_base, formula = ~skinsite+extraction_batch)
@@ -250,7 +262,6 @@ ggsave(base_hand_v_forearm, filename = "baseline_hand_vs_forearm.pdf", height=5,
 
 
 ## Intra-individual vs inter-individual
-
 
 ## Beta dispersion
 f_dispersion = betadisper(bray_forearms, data.frame(sample_data(f_clean_rare))$sample_round, type = "centroid")
