@@ -22,13 +22,27 @@ load("forearms_paper1_clean_rarefied.RData")
 
 ## ALPHA DIVERSITY -------------------------------------------------------------------------------------------------------------------------------------------
 
-# data frame with richness metrics
-all_rounds_hands= data.frame("sampleid" = phyloseq::sample_data(hands_clean_rare)$sampleid, "subjectid" = phyloseq::sample_data(hands_clean_rare)$subjectid, 
-                             "Observed" = phyloseq::estimate_richness(hands_clean_rare, measures = "Observed"),
-                             "Shannon" = phyloseq::estimate_richness(hands_clean_rare, measures = "Shannon"),
-                             "Inverse_Simpson" = phyloseq::estimate_richness(hands_clean_rare, measures = "InvSimpson"), 
-                             "sample_round" = factor(phyloseq::sample_data(hands_clean_rare)$sample_round),
-                             "batch" = factor(phyloseq::sample_data(hands_clean_rare)$extraction_batch))
+# List of diversity metrics
+richness_metrics <- c("Observed", "Shannon", "InvSimpson")
+
+# Function to create a data frame with diversity metrics
+create_alphadiv_df <- function(physeq_obj, metrics) {
+  richness_data <- lapply(metrics, function(m) estimate_richness(physeq_obj, measures = m))
+  richness_df <- data.frame(
+    sampleid = sample_data(physeq_obj)$sampleid,
+    subjectid = sample_data(physeq_obj)$subjectid,
+    sample_round = factor(sample_data(physeq_obj)$sample_round),
+    batch = factor(sample_data(physeq_obj)$extraction_batch)
+  )
+  # Add richness metrics to the data frame
+  alphadiv_df <- cbind(richness_df, setNames(richness_data, metrics))
+  return(alphadiv_df)
+}
+
+# Create data frames with diversity metrics
+all_rounds_hands <- create_alphadiv_df(hands_clean_rare, richness_metrics) #hands alpha div
+all_rounds_forearm <- create_alphadiv_df(f_clean_rare, richness_metrics) #forearms alpha div
+
 
 #linear mixed effects models
 model_h_obs = lme(Observed ~ sample_round+batch, random = ~ 1 + sample_round | subject.id, data = all_rounds_hands, method="REML") #REML is default, random effect includes random intercept and slope
@@ -71,13 +85,7 @@ fig_all_hands = all_rounds_hands %>%
   scale_fill_manual(values=c("grey80", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) +
   scale_y_continuous(expand = expansion(mult=c(0.1,0.1)))
 
-#All rounds FOREARM alpha div figure
-#All forearm samples in dataframe
-all_rounds_forearm = data.frame("sampleid" = phyloseq::sample_data(f_clean_rare)$sampleid, "subjectid" = phyloseq::sample_data(f_clean_rare)$subjectid, "Observed" = phyloseq::estimate_richness(f_clean_rare, measures = "Observed"),
-                                "Shannon" = phyloseq::estimate_richness(f_clean_rare, measures = "Shannon"),
-                                "Inverse Simpson" = phyloseq::estimate_richness(f_clean_rare, measures = "InvSimpson"),
-                                "sample_round" = factor(phyloseq::sample_data(f_clean_rare)$sample_round),
-                                "batch" = factor(phyloseq::sample_data(f_clean_rare)$extraction_batch))
+#FOREARM alpha div
 
 model_f_obs = lme(Observed ~ sample_round+batch, random = ~ 1 | subjectid, data = all_rounds_forearm, method="REML") #REML is default, random effect includes only random intercept, error if both
 model_f_sha = lme(Shannon ~ sample_round+batch, random = ~ 1 + sample_round | subjectid, data = all_rounds_forearm, method="REML")
