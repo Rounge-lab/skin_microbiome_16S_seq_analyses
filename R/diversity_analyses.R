@@ -1,4 +1,4 @@
-#Load libraries ---------------------------------------------------------------------------------------------------------------------------------------------
+# Load libraries ---------------------------------------------------------------------------------------------------------------------------------------------
 library(readr)
 library(dplyr)
 library(tibble)
@@ -77,52 +77,44 @@ models_forearms <- lme_forearms$models
 emmeans_forearms <- lme_forearms$emmeans_list
 
                        
-                
+## PLOTTING ## 
 
-#PLOTTING 
-
-#All rounds HANDS alpha div figure
-fig_all_hands = all_rounds_hands %>% 
-  gather(key=metric, value=value, c("Shannon", "InvSimpson")) %>%
-  mutate(metric=factor(metric, levels = c("Shannon", "InvSimpson"))) %>%
-  ggplot(aes(x=factor(sample_round, level = c("1", "2", "3")),
-             y=value), fill = sample_round) +
-  geom_boxplot(outlier.color="grey", aes(group = sample_round, fill= sample_round)) + 
-  #geom_violin(aes(group = sample_round, fill= sample_round)) +
-  geom_jitter(height=0, width=0) +
-  labs(title="", x="", y = "") + 
-  facet_wrap(~ metric, scales = "free", labeller = labeller(metric = c("InvSimpson"="Inverse Simpson"))) +
-  theme(legend.position="none", legend.text = element_text(size=14), legend.title = element_text(size=14), strip.text=element_text(size=12), axis.text = element_text(size=10), axis.text.x = element_blank()) +
-  theme_bw() + 
-  scale_fill_manual(values=c("grey80", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) +
-  scale_y_continuous(expand = expansion(mult=c(0.1,0.1)))
-
-#FOREARM alpha div
-
-fig_all_forearm = all_rounds_forearm %>% 
+# Function to create alpha diversity boxplots for each sample round
+create_alpha_div_plot <- function(data, scales, legend_pos) {
+  data %>% 
   gather(key=metric, value=value, c("Shannon", "InvSimpson")) %>%
   mutate(metric=factor(metric, levels = c("Shannon", "InvSimpson"))) %>%
   ggplot(aes(x=sample_round, y=value), fill = sample_round) +
   geom_boxplot(outlier.color="grey", aes(group = sample_round, fill= sample_round)) + 
-  #geom_violin(aes(group = sample_round, fill= sample_round)) +
   geom_jitter(height=0, width=0) +
-  theme(legend.position="bottom", axis.text.x = element_blank(), legend.text = element_text(size=14), legend.title = element_text(size=14), strip.text=element_text(size=12), axis.text = element_text(size=10)) + 
   labs(title="", x="", y = "") + 
-  facet_wrap(~ metric, scales = "free_y", labeller = labeller(metric = c("InvSimpson"="Inverse Simpson"))) +
+  facet_wrap(~ metric, scales = scales, labeller = labeller(metric = c("InvSimpson"="Inverse Simpson"))) +
   theme_bw() + 
-  scale_fill_manual(values=c("grey80", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post exercise", "3W Post exercise")) +
-  scale_y_continuous(expand = expansion(mult=c(0.1,0.1))) #breaks = pretty_breaks(n=4), labels = scales::number_format(accuracy=0.1), 
+  theme(
+    legend.position=legend_pos, 
+    axis.text.x = element_blank(), 
+    legend.text = element_text(size=14), 
+    legend.title = element_text(size=14), 
+    strip.text=element_text(size=12), 
+    axis.text = element_text(size=10)
+  ) + 
+  scale_fill_manual(
+    values=c("grey80", "deepskyblue4", "darkgoldenrod3"), 
+    name = "Sample round", 
+    labels = c("Baseline", "Post exercise", "3W Post exercise")
+  ) +
+  scale_y_continuous(expand = expansion(mult=c(0.1,0.1)))
+}
 
-#geom_segment(aes(x=1, xend=2, y=5, yend=5), color="black", lwd=0.1) + annotate("text", x=1.5, y=5.05, label="**", size=3) + labs(x="") + geom_segment(aes(x=1, xend=3, y=5.25, yend=5.25), color="black", lwd=0.1) + annotate("text", x=2, y=5.3, label="p=0.0002", size=3) + labs(x="")
+  
+# Alpha div figures for each skinsite over sample rounds
+fig_all_hands <- create_alpha_div_plot(all_round_hands, scales="free", legend_pos="none") 
+fig_all_forearm <- create_alpha_div_plot(all_round_forearms, scales="free_y", legend_pos="bottom")
 
-
-#combine plot for hands and forearm
+# Combine plot for hands and forearm (Fig. 3)
 alphadiv_sha_inv = ggarrange(fig_all_hands, fig_all_forearm, labels=c("A", "B"), ncol=1, nrow=2, common.legend = TRUE, legend="bottom", align = "hv") + theme(legend.position = "bottom")
-ggsave(alphadiv_sha_inv, file="alphadiv_hands_forearms_paper1.pdf", width=210, units="mm", height=150) #A4 width
+ggsave(alphadiv_sha_inv, file="Figure3.pdf", width=210, units="mm", height=150) #A4 width
 
-
-combplot = arrangeGrob(fig_all_hands, fig_all_forearm, ncol=1)
-ggsave(file = "alphadiv_hands_forearms_paper1.pdf", combplot) #save plot
 
 
 #Alpha div hands vs forearms (supplementary Fig. S7)
