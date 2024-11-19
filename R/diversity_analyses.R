@@ -7,6 +7,7 @@ library(stringr)
 library(ggplot2)
 library(phyloseq) 
 library(grid)
+library(gridExtra)
 library(ggpubr)
 library(vegan)
 library(nlme)
@@ -166,19 +167,34 @@ for metric in richness_metrics {
 
 ## BETA DIVERSITY ----------------------------------------------------------------------------------------------------------------------------------------------
 
-# Test all factors, how much they influence microbiome composition (PERMANOVA)
-bray = phyloseq::distance(ps_sol_paper1_clean_rarefied, method="bray") #dissimilarity matrix
-test.adonis = adonis2(bray ~ subjectid + sample_round + skinsite + extraction_batch, data = data.frame(
-  sample_data(ps_sol_paper1_clean_rarefied)), permutations = 999, by="margin") #by="margin" would test each term against each other
-test.adonis
-adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
+# Function to calculate Bray-Curtis distance matrix
+calculate_bray_distance <- function(physeq_obj) {
+  phyloseq::distance(physeq_obj, method = "bray")
+}
 
-bray_hands = phyloseq::distance(hands_clean_rare, method="bray") 
-bray_forearms = phyloseq::distance(f_clean_rare, method="bray") 
-#PERMANOVA
-test.adonis = adonis2(bray_hands ~ subjectid + sample_round + extraction_batch, data = data.frame(sample_data(hands_clean_rare)), permutations = 999, by="margin") #by="margin" would test each term against each other
-test.adonis #R² is the percentage of variance explained by the rounds
-adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
+# Function to perform PERMANOVA
+perform_permanova <- function(distance_matrix, formula, data, by="terms") {
+  test.adonis <- adonis2(distance_matrix ~ get(formula), data = data, permutations = 999, by = by) # by="margin" tests each term against each other
+  adonis_adjusted <- p.adjust(test.adonis$`Pr(>F)`, method = "BH") # Benjamini-Hochberg method for p-value adjustment
+  list(test.adonis = test.adonis, adonis_adjusted = adonis_adjusted) #R² is the percentage of variance explained by the rounds
+}
+                          
+# Calculate distance matrices
+bray_all <- calculate_bray_distance(ps_sol_paper1_clean_rarefied) # full matrix
+bray_hands <- calculate_bray_distance(hands_clean_rare) # hand samples only
+bray_forearms <- calculate_bray_distance(f_clean_rare) # forearm samples only
+
+# Perform PERMANOVA
+adonis_all <- perform_permanova(bray_all, 'subjectid + sample_round + skinsite + extraction_batch', data.frame(sample_data(ps_sol_paper1_clean_rarefied)), by="margin") # Test all factors, how much they influence microbiome composition
+adonis_hands <- perform_permanova(bray_hands, 'subjectid + sample_round + extraction_batch', data.frame(sample_data(hands_clean_rare)), by="margin")
+adonis_forearms <- perform_permanova(bray_forearms, 'subjectid + sample_round + extraction_batch', data.frame(sample_data(f_clean_rare)), by="margin")
+
+# Test for batch effects using permanova
+adonis_batch_hands <- perform_permanova(bray_hands, 'extraction_batch', data.frame(sample_data(hands_clean_rare))) #batch effects hands
+adonis_batch_forearms <- perform_permanova(bray_forearms, 'extraction_batch', data.frame(sample_data(f_clean_rare))) #batch effects forearms
+                          
+
+
 
 #PCOA plot of beta diversity, including stat results
 pcoa_hands = ordinate(hands_clean_rare, method="PCoA", distance=bray_hands, formula = ~ sample_round+extraction_batch) #PCoA results
@@ -202,18 +218,12 @@ betaplot_batch_f = plot_ordination(f_clean_rare, pcoa_forearms, color = "extract
   stat_ellipse() + 
   labs(color="Batch") +
   scale_color_brewer(palette="Dark2") + geom_point(size=2) + theme_bw()
-test.adonis = adonis2(bray_forearms ~ extraction_batch, data = data.frame(sample_data(f_clean_rare)), permutations = 999) #by="margin" would test each term against each other
-test.adonis #R² is the percentage of variance explained by the rounds
-adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
 beta_forearm_batch = betaplot_batch_f + annotation_custom(grobTree(textGrob("R² = 0.0755, p = 0.187", x=0.03, y=0.98, hjust=0, gp=gpar(col="black", fontsize=8))))
 
 betaplot_batch_h= plot_ordination(hands_clean_rare, pcoa_hands, color = "extraction_batch") +
   stat_ellipse() + 
   labs(color="Batch") +
   scale_color_brewer(palette="Dark2") + geom_point(size=2) + theme_bw()
-test.adonis = adonis2(bray_hands ~ extraction_batch, data = data.frame(sample_data(hands_clean_rare)), permutations = 999) #by="margin" would test each term against each other
-test.adonis #R² is the percentage of variance explained by the rounds
-adonis_adjusted = p.adjust(test.adonis$`Pr(>F)`, method="BH")
 beta_hands_batch = betaplot_batch_h + annotation_custom(grobTree(textGrob("R² = 0.05568, p = 0.022", x=0.03, y=0.98, hjust=0, gp=gpar(col="black", fontsize=8))))
 beta_comb_batch = ggarrange(beta_hands_batch, beta_forearm_batch, labels=c("A", "B"), ncol=2, nrow=1, common.legend=TRUE, legend="right", align="hv")
 
