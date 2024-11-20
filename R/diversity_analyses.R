@@ -299,45 +299,51 @@ saveRDS(betadisp_boxes, file="beta_disp_boxplot.rds")
 
 ## Bray-Curtis distances within vs between
                           
-bray_mat = as.matrix(bray_all) %>% as.data.frame()
-rownames(bray_mat) = as.numeric(rownames(bray_mat))
-meta_sol_paper1 = data.frame(sample_data(ps_sol_paper1_clean_rarefied))
-meta_sol_paper1$sampleid = as.character(meta_sol_paper1$sampleid)
+# Convert Bray-Curtis distance to matrix and dataframe
+bray_mat <- as.data.frame(as.matrix(bray_all))
+rownames(bray_mat) <- as.numeric(rownames(bray_mat))
 
-#within vs between subject distance
-bray_within_between_samesite = bray_mat %>% 
-  rownames_to_column("sample_id_1") %>% 
-  pivot_longer(-sample_id_1, names_to="sample_id_2", values_to = "dist") %>% 
-  left_join(meta_sol_paper1 %>% select(
-    sample_id_1 = sampleid, subject_id_1 = subjectid, sample_round_1 = sample_round, skinsite_1 = skinsite)) %>% 
-  left_join(meta_sol_paper1 %>% select(
+# Extract metadata
+meta_sol_paper1 <- data.frame(sample_data(ps_sol_paper1_clean_rarefied)) %>%
+  mutate(sampleid = as.character(sampleid))
+
+# Function to compute within vs. between distances between all pairs of samples
+compute_within_between <- function(bray_matrix, meta_data) {
+  bray_matrix %>% 
+    rownames_to_column("sample_id_1") %>%  # Convert rownames to a column for use in joins
+    pivot_longer(-sample_id_1, names_to = "sample_id_2", values_to = "dist") %>% 
+    left_join(meta_sol_paper1 %>% select( # Join metadata to the first sample_id
+    sample_id_1 = sampleid, subject_id_1 = subjectid, sample_round_1 = sample_round, skinsite_1 = skinsite)) %>%
+    left_join(meta_sol_paper1 %>% select( # Join metadata to the second sample_id
     sample_id_2 = sampleid, subject_id_2 = subjectid, sample_round_2 = sample_round, skinsite_2 = skinsite)) %>% 
-  mutate(same_individual = case_when(subject_id_1 == subject_id_2 ~"Within",
-                                     subject_id_1 != subject_id_2 ~"Between")) %>% 
-  mutate(same_site = case_when(skinsite_1 == skinsite_2 ~"Same_skinsite",
-                               skinsite_1 != skinsite_2 ~"Hands vs Forearms")) %>% 
-  mutate(same_time = case_when(sample_round_1 == sample_round_2 ~"Same_time",
-                               sample_round_1 != sample_round_2 ~"Over time")) %>%
-  filter(sample_id_1 != sample_id_2) ##remove dist to the same sample
+    mutate(
+      same_individual = ifelse(subject_id_1 == subject_id_2, "Within", "Between"), # Determine if samples are from the same individual
+      same_site = ifelse(skinsite_1 == skinsite_2, "Same_skinsite", "Hands vs Forearms"), # Determine if samples are from the same skin site
+      same_time = ifelse(sample_round_1 == sample_round_2, "Same_time", "Over time") # Determine if samples are from the same time point
+    ) %>%
+    filter(sample_id_1 != sample_id_2) %>% # Remove distances to the same sample
+    distinct(pair_id = paste(pmin(sample_id_1, sample_id_2), pmax(sample_id_1, sample_id_2), sep = "_"), .keep_all = TRUE) # Remove duplicate pairs of samples
+}
 
-inter_intra_distances <- bray_within_between_samesite %>% 
-  mutate(pair_id = paste(pmin(sample_id_1, sample_id_2), pmax(sample_id_1, sample_id_2), sep="_")) %>% 
-  distinct(pair_id, .keep_all = TRUE)
+# Data frame with computed within/between BC-distances                          
+inter_intra_distances <- compute_within_between(bray_mat, meta_sol_paper1)
 
-bray_within_between_samesite %>% 
+# Same skin site plot
+intra_inter_samesite_plot <- inter_intra_distances %>% 
   group_by(same_individual, same_site, subject_id_1, skinsite_1) %>% 
   summarize(mean_dist= mean(dist)) %>% 
   ggplot(aes(x=reorder(same_individual, mean_dist),y=mean_dist, fill=same_individual)) + 
   geom_boxplot() + labs(y="Bray-Curtis distance") + scale_fill_manual(values=c("#9e4f4a", "#ecb775")) +
   facet_wrap(~skinsite_1, labeller= labeller(skinsite_1 = function(variable) { #facet labels are capitalized
-    return(tools::toTitleCase(as.character(variable)))})) -> intra_inter_samesite_plot
+    return(tools::toTitleCase(as.character(variable)))})) 
 
-bray_within_between_samesite %>% 
+# Hands vs forearms plot
+intra_inter_h_vs_f_plot <- inter_intra_distances %>% 
   filter(skinsite_1 != skinsite_2) %>% 
   group_by(same_individual, same_site, subject_id_1, skinsite_1) %>% 
   summarize(mean_dist= mean(dist)) %>% 
   ggplot(aes(x=reorder(same_individual, mean_dist),y=mean_dist, fill=same_individual)) + 
-  geom_boxplot() + facet_wrap(~same_site) + labs(y="Bray-Curtis distance") + scale_fill_manual(values=c("#9e4f4a", "#ecb775")) -> intra_inter_h_vs_f_plot
+  geom_boxplot() + facet_wrap(~same_site) + labs(y="Bray-Curtis distance") + scale_fill_manual(values=c("#9e4f4a", "#ecb775")) 
 
 # Combined plot
 intra_inter_beta_plot <- ggarrange(intra_inter_samesite_plot + rremove("xlab") + theme(legend.position = "none", text = element_text(size=16)), 
