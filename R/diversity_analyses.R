@@ -293,45 +293,6 @@ compute_within_between <- function(bray_matrix, meta_data) {
 inter_intra_distances <- compute_within_between(bray_mat, meta_sol_paper1)
 saveRDS(inter_intra_distances, file="inter_intra_distances.rds") #for later use
                           
-# Function to create Bray-Curtis boxplots
-create_BC_boxplot <- function(data) {
-  data %>%
-    group_by(same_individual, same_site, subject_id_1, skinsite_1) %>%  # Group by key variables
-    summarize(mean_dist = mean(dist)) %>%  # Calculate mean distances
-    ggplot(aes(x = reorder(same_individual, mean_dist), y = mean_dist, fill = same_individual)) +
-    geom_boxplot() +  
-    labs(y = "Bray-Curtis distance") +  # y-axis label
-    scale_fill_manual(values = c("#9e4f4a", "#ecb775")) +  # Define fill colors
-    theme_bw() + # Use a clean theme
-    theme(text = element_text(size = 16), legend.position = "none")
-}
-                          
-# Same skin site plot
-intra_inter_samesite_plot <- create_BC_boxplot(inter_intra_distances) + 
-  facet_wrap(~ skinsite_1, scales = "free", labeller = labeller(
-    skinsite_1 = function(var) tools::toTitleCase(as.character(var)))) #facet labels are capitalized
-                                                                
-# Hands vs forearms plot
-bray_h_vs_f <- inter_intra_distances %>% filter(skinsite_1 != skinsite_2)
-intra_inter_h_vs_f_plot <- create_BC_boxplot(bray_h_vs_f) + 
-  facet_wrap(~ same_site) +
-  theme(axis.ticks.y = element_blank(), 
-        axis.text.y = element_blank())
-
-# Combine the plots side by side
-intra_inter_beta_plot <- ggarrange(
-  intra_inter_samesite_plot + rremove("xlab"),
-  intra_inter_h_vs_f_plot + rremove("ylab") + rremove("xlab"),
-  widths = c(2, 1)
-)
-
-ggsave(intra_inter_beta_plot, file="intra_inter_betaplot.pdf", width=11, height=5)
-
-
-## Figure 5 - inter- and intraindividual variation
-#load("inter_intra_distances.rds") #load or read data set if not already loaded
-#inter_intra_distances <- readRDS("PATH/inter_intra_distances.rds")
-
 #  Bray-Curtis distance between samples from the same individual over time (intra-individual), comparing skin sites (Fig 5A)
 fig5_a <- inter_intra_distances %>% as.data.frame() %>%
   filter(same_site == "Same_skinsite" & same_time == "Over time" & same_individual == "Within") %>%
