@@ -111,7 +111,8 @@ fig_all_hands <- create_alpha_div_plot(all_round_hands, scales="free", legend_po
 fig_all_forearm <- create_alpha_div_plot(all_round_forearms, scales="free_y", legend_pos="bottom")
 
 # Combine plot for hands and forearm (Fig. 3)
-alphadiv_sha_inv <- ggarrange(fig_all_hands, fig_all_forearm, labels=c("A", "B"), ncol=1, nrow=2, common.legend = TRUE, legend="bottom", align = "hv") + theme(legend.position = "bottom")
+alphadiv_sha_inv <- ggarrange(fig_all_hands, fig_all_forearm, labels=c("A", "B"), ncol=1, nrow=2, common.legend = TRUE, legend="bottom", align = "hv") + 
+                      theme(legend.position = "bottom")
 ggsave(alphadiv_sha_inv, file="Figure3.pdf", width=210, units="mm", height=150) #A4 width
 
 
