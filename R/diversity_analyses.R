@@ -257,47 +257,10 @@ bray_base_skinsite <- bray_base_skinsite + annotation_custom(grobTree(textGrob("
 
 # Combined alpha and beta div for skin site comparison baseline (Fig. S7)
 ggarrange(alpha_skinsite_base, bray_base_skinsite, labels=c("A", "B"), ncol=1, nrow=2) -> base_hand_v_forearm
-ggsave(base_hand_v_forearm, filename = "FigureS7", height=5, width=6)
-             
+ggsave(base_hand_v_forearm, filename = "FigureS7", height=5, width=6)             
 
 
-## Intra-individual vs inter-individual
-
-## Beta dispersion
-f_dispersion = betadisper(bray_forearms, data.frame(sample_data(f_clean_rare))$sample_round, type = "centroid")
-f_disp_test = permutest(f_dispersion, pairwise=TRUE, permutations=999)
-anosim_results = anosim(bray_forearms, data.frame(sample_data(f_clean_rare))$sample_round, permutations = 999)
-anosim_results$statistic #R value range between -1 and 1. Positive values suggest that there is more similarity within groups than between groups.
-anosim_results$signif
-
-anova_test_f = anova(f_dispersion) #test statistical difference in beta dispersion
-TukeyHSD(f_dispersion) #which contrasts are different
-plot(f_dispersion)
-boxplot(f_dispersion, xlab="Sample round") #distribution of distances to centroid for each round - how similar are the soldiers to each other?
-
-beta_disp_hands = data.frame(
-  site = "hands", 
-  round = data.frame(sample_data(hands_clean_rare))$sample_round,
-  beta_disp = h_dispersion$distances
-)
-beta_disp_forearms = data.frame(
-  site = "forearms", 
-  round = data.frame(sample_data(f_clean_rare))$sample_round,
-  beta_disp = f_dispersion$distances
-)
-disp_combined = rbind(beta_disp_hands, beta_disp_forearms)
-
-# Beta dispersion boxplot (soldier similarity over time)
-betadisp_boxes = ggplot(disp_combined, aes(x=round, y=beta_disp, fill=round)) +
-  geom_boxplot() +
-  facet_wrap(~reorder(site,beta_disp)) +
-  labs(x="", y="Distance to centroid") + 
-  theme_bw() +
-  scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) 
-ggsave(betadisp_boxes, filename="beta_disp_boxplot.pdf")
-saveRDS(betadisp_boxes, file="beta_disp_boxplot.rds")
-
-## Bray-Curtis distances within vs between
+## Bray-Curtis distances within (intra-individual) vs between (inter-individual)
                           
 # Convert Bray-Curtis distance to matrix and dataframe
 bray_mat <- as.data.frame(as.matrix(bray_all))
@@ -327,7 +290,8 @@ compute_within_between <- function(bray_matrix, meta_data) {
 
 # Data frame with computed within/between BC-distances                          
 inter_intra_distances <- compute_within_between(bray_mat, meta_sol_paper1)
-
+saveRDS(inter_intra_distances, file="inter_intra_distances.rds") #for later use
+                          
 # Function to create Bray-Curtis boxplots
 create_BC_boxplot <- function(data) {
   data %>%
@@ -363,17 +327,12 @@ intra_inter_beta_plot <- ggarrange(
 ggsave(intra_inter_beta_plot, file="intra_inter_betaplot.pdf", width=11, height=5)
 
 
-# Beta div intra-individual over time Fig. 5
-#load("inter_intra_distances.rds")
-inter_intra_distances <- readRDS("PATH/inter_intra_distances.rds")
+## Figure 5 - inter- and intraindividual variation
+#load("inter_intra_distances.rds") #load or read data set if not already loaded
+#inter_intra_distances <- readRDS("PATH/inter_intra_distances.rds")
 
-#between-distance over time, for each skinsite (Fig 5C)
-inter_intra_distances %>% as.data.frame() %>% filter(same_site=="Same_skinsite" & same_individual=="Between" & same_time=="Same_time") -> inter_dist
-inter_dist %>% ggplot(aes(x=sample_round_1, y=dist, fill=sample_round_1)) + geom_boxplot() + scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name="Sample round", labels=c("Baseline", "Post exercise", "3W Post exercise")) + labs(x="", y="Bray-Curtis distance (inter-individual)") + theme_bw() + facet_wrap(~skinsite_1, labeller=labeller(skinsite_1 = c(hands="hands", forearm="forearms"))) -> inter_dist_boxes
-saveRDS(inter_dist_boxes, file="inter_dist_boxes.rds")
-
-fig5_a <- inter_intra_distances %>%
-  as.data.frame() %>%
+#  Bray-Curtis distance between samples from the same individual over time (intra-individual), comparing skin sites (Fig 5A)
+fig5_a <- inter_intra_distances %>% as.data.frame() %>%
   filter(same_site == "Same_skinsite" & same_time == "Over time" & same_individual == "Within") %>%
   group_by(sample_round_1) %>%
   ggplot(aes(x = reorder(skinsite_1, dist), y = dist, fill = skinsite_1)) + 
@@ -383,9 +342,9 @@ fig5_a <- inter_intra_distances %>%
   theme_bw() + 
   theme(axis.text.x = element_blank()) + 
   ylim(0.35, 0.97)
-                        
-fig5_b <- inter_intra_distances %>%
-  as.data.frame() %>%
+
+# Bray-Curtis distance between hands and forearms (H-to-F) within each individual (Fig 5B)
+fig5_b <- inter_intra_distances %>% as.data.frame() %>%
   filter(same_site == "Hands vs Forearms" & same_time == "Same_time" & same_individual == "Within") %>%
   group_by(sample_round_1) %>%
   ggplot(aes(x = sample_round_1, y = dist, fill = sample_round_1)) +
@@ -395,9 +354,87 @@ fig5_b <- inter_intra_distances %>%
   theme_bw() + 
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + 
   ylim(0.35, 0.97)
-          
-fig5_c <- readRDS("PATH/inter_dist_boxes.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
-fig5_d <- readRDS("PATH/beta_disp_boxplot.rds") + ylim(0.35, 0.97) + theme(axis.text.x = element_blank())
+
+# Between-distance over time, for each skinsite (Fig 5C)
+fig5_c <- inter_intra_distances %>% as.data.frame() %>% 
+    filter(same_site=="Same_skinsite" & same_individual=="Between" & same_time=="Same_time") %>% 
+    ggplot(aes(x=sample_round_1, y=dist, fill=sample_round_1)) + 
+    geom_boxplot() + 
+    scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name="Sample round", labels=c("Baseline", "Post exercise", "3W Post exercise")) + 
+    labs(x="", y="Bray-Curtis distance (inter-individual)") + 
+    theme_bw() + 
+    facet_wrap(~skinsite_1, labeller=labeller(skinsite_1 = c(hands="hands", forearm="forearms"))) + 
+    ylim(0.35, 0.97) + 
+    theme(axis.text.x = element_blank())
+saveRDS(fig5_c, file="inter_dist_boxes.rds")
+#fig5_c <- readRDS("PATH/inter_dist_boxes.rds") 
+
+
+## Beta dispersion (soldier similarity over time)
+
+analyze_dispersion_and_anosim <- function(distance_matrix, sample_data_frame, site_name) {
+    sample_round <- sample_data_frame$sample_round
+    dispersion <- betadisper(distance_matrix, sample_round, type = "centroid") # Compute dispersion  
+    permutest_result <- permutest(dispersion, pairwise = TRUE, permutations = 999) # Perform permutest
+    
+    # Perform ANOSIM
+    anosim_result <- anosim(distance_matrix, sample_round, permutations = 999)
+    anosim_stat <- anosim_result$statistic #R value range between -1 and 1. Positive values suggest that there is more similarity within groups than between groups.
+    anosim_signif <- anosim_result$signif
+    
+    # ANOVA and TukeyHSD
+    anova_test <- anova(dispersion)
+    tukey_result <- TukeyHSD(dispersion)
+    
+    # Visualization of dispersion (optional)
+    plot(dispersion)
+    boxplot(dispersion, xlab = "Sample round") #distribution of distances to centroid for each round - how similar are the soldiers to each other?
+    
+    # Prepare a data frame for betadisp distances
+    beta_disp_df <- data.frame(
+        site = site_name, 
+        round = sample_round,
+        beta_disp = dispersion$distances
+    )
+    
+    return(list(
+        dispersion = dispersion, 
+        permutest_result = permutest_result, 
+        anosim_stat = anosim_stat, 
+        anosim_signif = anosim_signif, 
+        anova_test = anova_test, 
+        tukey_result = tukey_result, 
+        beta_disp_df = beta_disp_df
+    ))
+}
+
+# Beta dispersion for forearms
+forearms_results <- analyze_dispersion_and_anosim(bray_forearms, data.frame(sample_data(f_clean_rare)), "forearms")
+#print(forearms_results$anosim_stat)
+#print(forearms_results$anosim_signif)
+#print(forearms_results$anova_test)
+#print(forearms_results$tukey_result)
+
+# Beta dispersion for forearms hands
+hands_results <- analyze_dispersion_and_anosim(bray_hands, data.frame(sample_data(hands_clean_rare)), "hands")
+
+# Combine data frames
+disp_combined <- rbind(forearms_results$beta_disp_df, hands_results$beta_disp_df)
+
+# Beta dispersion (Fig 5D)
+fig5_d <- ggplot(disp_combined, aes(x=round, y=beta_disp, fill=round)) +
+  geom_boxplot() +
+  facet_wrap(~reorder(site,beta_disp)) +
+  labs(x="", y="Distance to centroid") + 
+  theme_bw() +
+  scale_fill_manual(values=c("azure4", "deepskyblue4", "darkgoldenrod3"), name = "Sample round", labels = c("Baseline", "Post Exercise", "3W Post Exercise")) +
+  ylim(0.35, 0.97) + 
+  theme(axis.text.x = element_blank())
+ggsave(fig5_d, filename="beta_disp_boxplot.pdf")
+saveRDS(betadisp_boxes, file="beta_disp_boxplot.rds")
+#fig5_d <- readRDS("PATH/beta_disp_boxplot.rds")
+
+# Figure 5 - Combine all plots to figure
 fig5_all <- ggarrange(fig5_a + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), 
                      fig5_b + theme(legend.position = "right", legend.text = element_text(size=11), legend.title=element_text(size=12)), 
                      fig5_c + theme(legend.position = "none", strip.text=element_text(size=11)), 
