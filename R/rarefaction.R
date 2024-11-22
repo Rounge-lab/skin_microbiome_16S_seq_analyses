@@ -79,10 +79,10 @@ ps_sol_paper1_clean_rarefied = rarefy_even_depth(ps_soldiers_paper1_clean, sampl
 
 # Phyloseq objects by skin site
 hands_clean_rare = subset_samples(ps_sol_paper1_clean_rarefied, skinsite=="hands") %>%
-  prune_taxa(taxa_sums(.) != 0, .) %>%
+  prune_taxa(taxa_sums(.) != 0, .)
 save(hands_clean_rare, file="hands_paper1_clean_rarefied.RData")
 f_clean_rare = subset_samples(ps_sol_paper1_clean_rarefied, skinsite=="forearm") %>%
-  prune_taxa(taxa_sums(.) != 0, .) %>%
+  prune_taxa(taxa_sums(.) != 0, .)
 save(f_clean_rare, file="forearms_paper1_clean_rarefied.RData")
 
 # -------------------------------------------------------------------------------------------------------------------------------------------------------
