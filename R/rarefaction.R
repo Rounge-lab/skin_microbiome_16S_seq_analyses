@@ -17,7 +17,7 @@ asv_neg = otu_table(ps_negatives)
 #Goodness of fit plot to assess rarefaction depth
 goodness_of_fit <- function(asv_table, rarefaction_depth) {
   S <- specnumber(t(asv_table)) #number of species
-  asv_t <- t(asv_table) #Transpose the ASV table for rarefaction
+  asv_t <- as.matrix(t(asv_table)) #Transpose the ASV table and create matrix for rarefaction
   set.seed(111) #Set random seed for reproducibility
   rarefied <- rarefy(asv_t, rarefaction_depth) # Perform rarefaction
   fit <- lm(rarefied ~ S) #Fit linear model
