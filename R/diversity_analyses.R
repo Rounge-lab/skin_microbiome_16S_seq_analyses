@@ -146,7 +146,7 @@ baseline_data %>%
 ggsave(alpha_skinsite_base, file="FigureS7A.pdf")
 
 # Testing alpha div difference between sites for each metric
-for metric in richness_metrics {
+for (metric in richness_metrics) {
   # Fit the linear mixed effects model using dynamically created formula
   model_skinsite <- lme(as.formula(paste(metric, "~ skinsite + batch")), random = ~ 1 | subjectid, data = baseline_data, method = "REML")
   
