@@ -16,8 +16,9 @@ all_contam = isContaminant(ps_all, method = "prevalence", neg = sample_data(ps_a
 table(all_contam$contaminant) #number of non-contaminants vs contaminants
 
 #Contaminants and their relative abundance in each sample
-ps_contam = prune_taxa(all_contam$contaminant, ps_all) %>% #phyloseq object of contaminants
-  prune_taxa(taxa_sums(.) != 0, .)  
+ps_contam = prune_taxa(all_contam$contaminant, ps_all) %>% # phyloseq object of contaminants
+  prune_taxa(taxa_sums(.) != 0, .) %>%
+  subset_samples(type == "sample") #exclude the negatives
 tax_table(ps_contam)[, c(2,6,7)] #taxonomy of contaminants
 ps_contam %>% transform_sample_counts(function (x) 100*x/sum(x)) %>% psmelt() %>% 
   ggplot(aes(x=Sample, y=Abundance, fill=Genus)) + geom_bar(stat="identity") + facet_grid(OTU ~ skinsite, scales="free") 
