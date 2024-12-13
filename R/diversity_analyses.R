@@ -45,18 +45,17 @@ all_rounds_forearms <- create_alphadiv_df(f_clean_rare, richness_metrics) #forea
 ## STATISTICS ## 
 
 # Function to fit linear mixed effects models for a given richness metric and design variable
-fit_mixed_effects_models <- function(df, metrics, design_var) {
+fit_mixed_effects_models <- function(df, metrics) {
   models <- list()
   emmeans_list <- list()
   
   for (metric in metrics) {
-    response_var <- if (metric == "InvSimpson") "Inverse_Simpson" else metric  # Handle naming inconsistency
-    formula <- as.formula(paste(response_var, "~", design_var, "+ batch"))
-    model_name <- paste0("model_h_", tolower(substr(response_var, 1, 3)))
-    emmeans_name <- paste0("emmeans_", tolower(substr(response_var, 1, 3)))
-
-    models[[model_name]] <- lme(formula, random = ~ 1 + get(design_var) | subjectid, data = df, method = "REML") #fit model, including subjectid as random effect
-    emmeans_list[[emmeans_name]] <- emmeans(models[[model_name]], specs = pairwise ~ design_var) #estimated marginal means and contrast between each sample round pair in the linear model
+    formula <- as.formula(paste(metric, "~ sample_round + batch")) #design formula
+    model_name <- paste0("model_", tolower(substr(metric, 1, 3)))
+    emmeans_name <- paste0("emmeans_", tolower(substr(metric, 1, 3)))
+    
+    models[[model_name]] <- lme(fixed = formula, random = ~ 1 | subjectid, data = df, method = "REML") # Fit model, including subjectid as random effect
+    emmeans_list[[emmeans_name]] <- emmeans(models[[model_name]], specs = pairwise ~ "sample_round") # Estimated marginal means and contrast between each sample round pair in the linear model
     
     # Print summary of the model
     print(paste("Summary for model:", model_name))
@@ -66,10 +65,9 @@ fit_mixed_effects_models <- function(df, metrics, design_var) {
   # Return models and emmeans
   return(list(models = models, emmeans_list = emmeans_list))
 }
-
 # Get the linear mixed effects models and emmeans for each skin site
-lme_hands <- fit_mixed_effects_models(all_rounds_hands, richness_metrics, "sample_round")
-lme_forearms <- fit_mixed_effects_models(all_rounds_forearms, richness_metrics, "sample_round")
+lme_hands <- fit_mixed_effects_models(all_rounds_hands, richness_metrics)
+lme_forearms <- fit_mixed_effects_models(all_rounds_forearms, richness_metrics)
 models_hands <- lme_hands$models
 emmeans_hands <- lme_hands$emmeans_list
 models_forearms <- lme_forearms$models
